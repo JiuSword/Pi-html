@@ -284,7 +284,7 @@ footer.end{margin-top:70px;padding-top:26px;border-top:1px solid var(--line);col
     到应用层 <b>pi-coding-agent</b> 的工具/扩展/会话体系，再到 <b>codemode</b>、<b>MCP</b> 与持久化/远程执行栈。
     全文结论均来自仓库源码、官方文档与完整 git 历史的交叉核对，面向需要做技术选型或二次开发的 Agent 工程师。
   </p>
-  <p class="small">阅读阶梯：<a href="brief.html">6 分钟速览</a> · <a href="index.html">本系列的 30–35 分钟精读版</a>（含架构图与关键代码）</p>
+  <p class="small">阅读阶梯：<a href="brief.html">6 分钟速览</a> · <a href="index.html">本系列的 25–30 分钟精读版</a>（含架构图与关键代码）</p>
 
   <div class="metagrid">
     <div class="m"><div class="k">调研对象</div><div class="v">earendil-works/pi</div></div>
@@ -652,7 +652,7 @@ convertToLlm: (messages) =&gt; messages.flatMap(m =&gt; m.role === <span class="
 </div>
 
 <h3 id="s4-2">4.2 事件序列</h3>
-<p>8 种事件，顺序严格。带工具调用的典型时序（摘自官方 README）：</p>
+<p>10 种事件，顺序严格。带工具调用的典型时序（摘自官方 README）：</p>
 <div class="codewrap">
   <div class="codehead"><span>prompt("Read config.json") 的事件流</span><span class="lang">text</span><button class="copy">复制</button></div>
 <pre>agent_start
@@ -1916,7 +1916,7 @@ session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩�
 </div>
 
 <footer class="end">
-  <p><b>Pi Agent 框架深度调研报告</b> · 基线 commit <code>ea448f4</code> · 版本 <code>v1.1.0</code> · MIT ｜ <a href="index.html">30–35 分钟精读版</a> · <a href="brief.html">6 分钟速览</a></p>
+  <p><b>Pi Agent 框架深度调研报告</b> · 基线 commit <code>ea448f4</code> · 版本 <code>v1.1.0</code> · MIT ｜ <a href="index.html">25–30 分钟精读版</a> · <a href="brief.html">6 分钟速览</a></p>
   <p class="small">报告由源码与官方文档整理而成；数据统计脚本基于完整 git 历史。项目内引用均为原文或忠实改写，代码片段为便于阅读做了删减与注释补充。</p>
 </footer>
 

@@ -338,7 +338,7 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
   <text x="72" y="342" class="lt">L2 · Agent 循环（决策层）</text>
   <rect class="bx bxh" x="72" y="352" width="612" height="42" rx="8"/>
   <text x="86" y="372" class="bt">pi-agent-core — <tspan class="bs">Agent / agentLoop：949 行</tspan></text>
-  <text x="86" y="387" class="bs">turn 生命周期 · 工具批（并行/串行）· steering / follow-up 队列 · 8 种事件</text>
+  <text x="86" y="387" class="bs">turn 生命周期 · 工具批（并行/串行）· steering / follow-up 队列 · 10 种事件</text>
   <rect class="bx bxh" x="696" y="352" width="192" height="42" rx="8"/>
   <text x="710" y="372" class="bt">消息边界转换</text>
   <text x="710" y="387" class="bs">AgentMessage ⇄ LLM Message</text>
@@ -613,8 +613,40 @@ context.messages.push(finalMessage);</pre>
 convertToLlm: (messages) =&gt; messages.flatMap(m =&gt; m.role === <span class="cs">"notification"</span> ? [] : [m])</pre>
 </div>
 
-<h3 id="s4-2">4.2 事件序列</h3>
-<p>8 种事件，顺序严格。带工具调用的典型时序如下（摘自官方 README）：</p>
+<h3 id="s4-2">4.2 事件序列（10 种，逐条列清）</h3>
+<p>先直接回答数量：「几种事件」在 Pi 里有<b>三个不同答案</b>，说数字时必须先说是哪一层——<b>低层循环 <code>AgentEvent</code> 是 10 种</b>，会话层是它的超集，扩展可注册的 <code>ExtensionEvent</code> 是 <b>32 种</b>。</p>
+<div class="twrap">
+<table>
+<thead><tr><th>层</th><th>类型</th><th>数量</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>L2 循环</td><td><code>AgentEvent</code>（<code>pi-agent-core</code>）</td><td><b>10</b></td><td>下表逐条列出</td></tr>
+<tr><td>L3 会话</td><td><code>AgentSessionEvent</code>（<code>coding-agent</code>）</td><td>超集 + 会话自有</td><td>继承 10 种，并把 <code>agent_end</code> 扩为带 <code>willRetry</code>；另有 <code>agent_before_settle</code> / <code>agent_settled</code> / <code>compaction_start|end</code> / <code>session_compact_failed</code> / <code>auto_retry_start|end</code> / <code>summarization_retry_*</code> / <code>queue_update</code> / <code>entry_appended</code> / <code>session_start|shutdown</code> / <code>thinking_level_changed</code> 等</td></tr>
+<tr><td>扩展</td><td><code>ExtensionEvent</code>（<code>pi.on()</code> 可注册名）</td><td><b>32</b></td><td>除了上面那些，还有 <code>before_agent_start</code> / <code>tool_call</code> / <code>tool_result</code> / <code>context</code> / <code>provider_stream_event</code> / <code>user_bash</code> / <code>project_trust</code> / <code>input</code> …</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>低层循环的 10 种事件（实测枚举）</h4>
+<div class="twrap">
+<table>
+<thead><tr><th>#</th><th>事件</th><th>携带字段</th><th>语义</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>agent_start</code></td><td>—</td><td>一次 run 开始（每次 <code>prompt()</code> / <code>continue()</code> 触发一次）</td></tr>
+<tr><td>2</td><td><code>agent_end</code></td><td><code>messages</code></td><td>一次 run 的最后一个事件；<b>await 的订阅者仍计入结算</b>。之后还可能有重试/压缩/队列</td></tr>
+<tr><td>3</td><td><code>turn_start</code></td><td>—</td><td>新一轮开始（一轮 = 一次 LLM 调用 + 它触发的工具执行）</td></tr>
+<tr><td>4</td><td><code>turn_end</code></td><td><code>message</code>、<code>toolResults[]</code></td><td>一轮完成，带这条 assistant 消息与它产生的全部工具结果</td></tr>
+<tr><td>5</td><td><code>message_start</code></td><td><code>message</code></td><td><b>任意角色</b>的消息开始（system / user / assistant / toolResult 都有）</td></tr>
+<tr><td>6</td><td><code>message_update</code></td><td><code>message</code>、<code>assistantMessageEvent</code></td><td><b>仅 assistant</b>，且仅在流式期间；分片藏在 <code>assistantMessageEvent.delta</code> 里</td></tr>
+<tr><td>7</td><td><code>message_end</code></td><td><code>message</code></td><td>消息定稿（<code>Agent</code> 类把 assistant 的这一步当屏障，见 4.4）</td></tr>
+<tr><td>8</td><td><code>tool_execution_start</code></td><td><code>toolCallId</code>、<code>toolName</code>、<code>args</code></td><td>工具开始；并行批里按<b>源码顺序</b>依次发出</td></tr>
+<tr><td>9</td><td><code>tool_execution_update</code></td><td>+ <code>partialResult</code></td><td>工具主动上报进度（工具调 <code>onUpdate()</code> 才会触发，不调就没有）</td></tr>
+<tr><td>10</td><td><code>tool_execution_end</code></td><td>+ <code>result</code>、<code>isError</code>、<code>durationMs?</code></td><td>工具定稿；并行批里按<b>完成顺序</b>发出（与 8 的顺序不同，见 4.4）</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">实测证据：用 faux provider 跑一轮带两个工具、且工具调用 <code>onUpdate()</code> 的对话，实际发出的事件类型恰好是上表 10 种（无缺失、无多余），其中 <code>message_update</code> 全部属于 assistant，<code>tool_execution_update</code> 两次来自两个工具的 <code>onUpdate</code>。见 <a href="#s13-2">13.2 验证实验</a> v10 套件。</p>
+
+<h4>带工具调用时的完整时序</h4>
 <div class="codewrap">
   <div class="codehead"><span>prompt("Read config.json") 的事件流</span><span class="lang">text</span><button class="copy">复制</button></div>
 <pre>agent_start
@@ -1392,7 +1424,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
 <!-- ============ 14 ============ -->
 <!-- ============ 13.2 验证实验 ============ -->
-<h3 id="s13-2">13.2 验证实验：9 个套件、77 项检查</h3>
+<h3 id="s13-2">13.2 验证实验：10 个套件、83 项检查</h3>
 <p>下一章会区分「哪些结论有实证」。这一节就是那些实证的来源：为了让矩阵里的「未验证」尽量变成「已验证」，我针对 Pi 的公开 API <b>写了一套可重复运行的验证脚本</b>（已随本报告一并交付）。</p>
 <div class="twrap">
 <table>
@@ -1406,6 +1438,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 <tr><td>v6 prepareLoadout</td><td><code>descriptions</code> 改写、<code>hiddenDeclarations</code>——且要能到达线上请求载荷</td><td>捕获 <code>before_provider_request</code> 的<b>真实载荷</b>逐字检查</td><td><span class="pill g">4/4</span></td></tr>
 <tr><td>v7 Codemode 集成</td><td><b>脚本内部的工具调用不进转录</b>、模型只看到脚本输出</td><td>注入 <code>createCodemodeExtension()</code>，让真实模型写脚本调工具，再检查转录</td><td><span class="pill g">5/5</span></td></tr>
 <tr><td>v8 CLI 三模式</td><td>print / JSON / RPC 三种接口形态</td><td>直接启动 CLI（需先清除继承的 <code>PI_*</code> 环境变量，否则会被当作宿主会话）</td><td><span class="pill g">3/3</span></td></tr>
+<tr><td>v10 事件类型</td><td>低层循环到底是几种事件、message_update 只对 assistant、tool_execution_update 由 onUpdate 触发、三层事件数量差异</td><td>faux provider 跑一轮带两工具（含 onUpdate）的对话，枚举实际发出的事件类型</td><td><span class="pill g">6/6</span></td></tr>
 <tr><td>v9 沙箱形态</td><td>worker 线程不阻塞宿主、失控脚本被中断、结果对象形态、发布物导出面</td><td>CPU 密集脚本 + 宿主 50ms 定时器探针；比对 <code>package.json</code> 的 <code>exports</code></td><td><span class="pill g">4/4</span></td></tr>
 </tbody>
 </table>
@@ -1493,7 +1526,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
 <div class="note">
   <b class="t">汇总</b>
-  <b>28 项结论获得运行级或 API 级实证</b>（其中 16 项来自 13.2 节的 9 个验证套件、共 77 项检查），<b>11 项仍未验证</b>（表 2 逐条说明了原因）。
+  <b>28 项结论获得运行级或 API 级实证</b>（其中 16 项来自 13.2 节的 10 个验证套件、共 83 项检查），<b>11 项仍未验证</b>（表 2 逐条说明了原因）。
   实证集中在一条主链上：<b>内核循环 → 工具执行与错误恢复 → 会话持久化 → 缓存与成本</b>。
   而 Pi 最具有辨识度的几个设计——<b>压缩、并行工具、扩展钩子、五级暴露、codemode、MCP、durable/远程</b>——本次运行都<b>没有碰到</b>，它们仍是「读代码得出的结论」。
   <br><br>
@@ -1536,7 +1569,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 <footer>
   <p><b>Pi Agent 框架调研报告</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜
      <a href="brief.html">6 分钟速览版</a> · <a href="full-report.html">45 分钟完整版（17 章 · 24 代码块）</a></p>
-  <p class="small">本文为「30–35 分钟精读版」：正文约 13,400 字 + 20 张表格 + 17 段代码 + 3 张图表。<b>第 13 章为实测数据与 9 个验证套件（77 项检查全通过），第 14 章为结论验证矩阵（28 项有实证 / 11 项仍未验证）</b>。引用的事件名、常量值、API 名可在源码中直接检索验证。</p>
+  <p class="small">本文为「30–35 分钟精读版」：正文约 13,400 字 + 20 张表格 + 17 段代码 + 3 张图表。<b>第 13 章为实测数据与 10 个验证套件（83 项检查全通过），第 14 章为结论验证矩阵（28 项有实证 / 11 项仍未验证）</b>。引用的事件名、常量值、API 名可在源码中直接检索验证。</p>
 </footer>
 
 </main>
