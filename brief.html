@@ -156,8 +156,8 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
 </table>
 </div>
 
-<h3>实测：本报告自身的运行记录</h3>
-<p>本报告就是一次 pi 的真实端到端运行（真实 API key、真实工具执行）的产物，因此有下列一手数据：</p>
+<h3>实测：一次人机协作调研任务的运行记录</h3>
+<p>这套报告不是「一把扔给 AI 自动生成」的结果，而是<b>人主导、AI 执行、人反复校正</b>的产物：对象、受众、交付形态、验收标准与每一轮纠错都来自发起人。下列数据就是这次真实运行的逐条解析：</p>
 <div class="grid">
   <div class="stat"><div class="k">会话墙钟</div><div class="v">3.94<small> 小时 / 161 次 LLM 调用 / 153 次工具调用</small></div></div>
   <div class="stat"><div class="k">缓存命中率</div><div class="v">99.29%</div></div>
@@ -202,7 +202,7 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
 </div>
 
 <h2 id="keys"><span class="num">04</span>五个关键设计（真正的价值所在）</h2>
-<p class="small">这五条是自研 Agent 时最容易踩坑、也最值得直接抄的部分。</p>
+<p class="small">这五条是自研 Agent 时最容易踩坑、也最值得直接借鉴的部分。</p>
 
 <div class="keys">
   <div class="key">
@@ -331,7 +331,7 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
 
 <footer>
   <p><b>Pi Agent 框架速览</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜ <a href="index.html">25–30 分钟主报告</a> · <a href="full-report.html">45 分钟完整版（17 章）</a></p>
-  <p class="small">数据来源：GitHub REST API（stars / forks / contributors）+ 本地完整 git 历史统计（提交数、作者分布、代码行数）+ 仓库源码与 37 篇官方文档 + 本报告自身真实会话的逐条解析（token / 成本 / 延迟 / 错误率）。社区数据抓取于 2026-10-11。<b>N=1 单会话实测，不是性能基准</b>。<br>结论均标注证据等级：<b>28 项有运行/API 级实证，11 项仍未验证</b>；其中 16 项来自额外写的 <b>8 个验证套件（73 项检查全部通过）</b>——包括写一个真实扩展验证五级暴露/审批钩子/嵌套调用、手写 MCP server 验证客户端、用真实模型验证 codemode 中间结果不进上下文。详见 <a href="index.html">主报告第 13.2 与 14 章</a>。</p>
+  <p class="small">数据来源：GitHub REST API（stars / forks / contributors）+ 本地完整 git 历史统计（提交数、作者分布、代码行数）+ 仓库源码与 37 篇官方文档 + <b>这次人机协作任务的真实会话逐条解析</b>（token / 成本 / 延迟 / 错误率）。社区数据抓取于 2026-10-11。<b>N=1 单会话实测，不是性能基准</b>；其中<b>五轮实质性纠错来自发起人</b>，纠正了结论矛盾、概念缺失与数字错误。<br>结论均标注证据等级：<b>28 项有运行/API 级实证，11 项仍未验证</b>；其中 16 项来自额外写的 <b>10 个验证套件（83 项检查全部通过）</b>——包括写一个真实扩展验证五级暴露/审批钩子/嵌套调用、手写 MCP server 验证客户端、用真实模型验证 codemode 中间结果不进上下文。详见 <a href="index.html">主报告第 13 章</a>。</p>
 </footer>
 </main>
 </div>

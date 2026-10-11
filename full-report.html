@@ -826,7 +826,7 @@ truncateHead(text, opts)  |  truncateTail(text, opts)  |  truncateLine(text, max
 </div>
 
 <div class="insight">
-  <span class="t">值得抄走的模式</span>
+  <span class="t">值得借鉴的模式</span>
   <b>1) 截断 + 明确指路</b>：结果被截断时告知模型完整输出在哪（浏览器端是临时文件路径；bash 则给 <code>full_output_path</code>），而不是静默丢数据。<br>
   <b>2) 文件变更队列</b>：<code>withFileMutationQueue()</code> 把「读-改-写」整体串行化，这是多工具并行执行下的必要保险。<br>
   <b>3) 工具用抛错表达失败</b>：<code>throw</code> 会被转成 <code>isError: true</code> 的工具结果；返回对象<b>不会</b>被标记为错误——这条约定能避免「模型把错误当成功继续推理」。
@@ -1316,7 +1316,7 @@ models                   运行非 LLM 模型（分类器 / 图像）</pre>
 <p>已知失败写在 README 里：不支持 elicitation；用动态客户端注册而非 CIMD；<code>auth/scope-retry-limit</code> 设计使然失败；不支持无状态的 <code>2026-07-28</code>。
 结果作为 <code>baseline.json</code> 提交进仓库，CI 有独立 job；<b>基线里通过的检查变失败、出现未列出的失败、或场景未跑，都会失败构建</b>。</p>
 <div class="note">
-  <b class="t">比自研更值得抄的一点</b>
+  <b class="t">比自研更值得借鉴的一点</b>
   <b>「重写协议 → 跑官方一致性套件 → 把基线提交进仓库」</b>。任何「不用官方库、自己实现规范」的决定，都必须回答「你怎么证明跟规范一致」。
   Pi 的答案是：跑官方套件、公开已知失败、把结果固化成可回归的基线。<b>子集并不可怕，无法度量的子集才可怕。</b>
 </div>
@@ -1723,8 +1723,8 @@ session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩�
 </div>
 
 <!-- ==================== 附录 ==================== -->
-<h2 id="s14"><span class="num">14</span>实测数据（本报告自身的真实运行）</h2>
-<p>前 13 章是「读源码 + 读文档」。本章不同：它来自<b>本报告生成过程本身的真实端到端运行</b>——一次完整使用真实 API key、真实工具执行的 pi 会话（<code>deepseek/deepseek-flash</code>，reasoning <code>high</code>），运行在第三方宿主 <b>pi-dashboard</b> 中（而非 pi 自带 TUI，这本身也是可嵌入性的一个现场证据）。数据由会话 JSONL（328 条目 / 324 消息）逐条解析得出。</p>
+<h2 id="s14"><span class="num">14</span>实测数据（一次人机协作调研任务的运行记录）</h2>
+<p>前 13 章是「读源码 + 读文档」。本章不同：它来自<b>这次调研任务本身的真实端到端运行</b>——一次完整使用真实 API key、真实工具执行的 pi 会话（<code>deepseek/deepseek-flash</code>，reasoning <code>high</code>），运行在第三方宿主 <b>pi-dashboard</b> 中（而非 pi 自带 TUI，这本身也是可嵌入性的一个现场证据）。数据由会话 JSONL（328 条目 / 324 消息）逐条解析得出。</p>
 
 <div class="tablewrap">
 <table>
@@ -1769,7 +1769,7 @@ session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩�
 等级说明：<span class="badge g">实测</span> 本次运行直接产生数据　<span class="badge b">源码</span> 读了实现代码　<span class="badge p">原文</span> 官方文档/README 声明　<span class="badge r">未验证</span> 本次运行未发生/未使用。</p>
 
 <h3>15.1 有实证支撑（28 项，完整表见主报告第 14 章）</h3>
-<p class="small">其中 <b>16 项</b>来自本次额外编写的 <b>8 个验证套件、共 73 项检查（全部通过）</b>：</p>
+<p class="small">其中 <b>16 项</b>来自本次额外编写的 <b>10 个验证套件、共 83 项检查（全部通过）</b>：</p>
 <div class="tablewrap">
 <table>
 <thead><tr><th>套件</th><th>覆盖的结论</th><th>验证方法</th><th>结果</th></tr></thead>
@@ -1782,6 +1782,8 @@ session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩�
 <tr><td>v6 prepareLoadout</td><td><code>descriptions</code> / <code>hiddenDeclarations</code> 到达线上载荷</td><td>捕获 <code>before_provider_request</code> 真实载荷</td><td><span class="badge g">4/4</span></td></tr>
 <tr><td>v7 Codemode 集成</td><td><b>脚本内的工具调用不进转录</b></td><td>注入 codemode 扩展，真实模型写脚本后查转录</td><td><span class="badge g">5/5</span></td></tr>
 <tr><td>v8 CLI 三模式</td><td>print / JSON / RPC</td><td>直接启动 CLI（需清除继承的 <code>PI_*</code> 环境变量）</td><td><span class="badge g">3/3</span></td></tr>
+<tr><td>v9 沙箱形态</td><td>worker 线程不阻塞宿主、失控脚本被中断、发布物导出面</td><td>CPU 密集脚本 + 宿主 50ms 定时器探针</td><td><span class="badge g">4/4</span></td></tr>
+<tr><td>v10 事件类型</td><td>低层循环到底几种事件、三层事件数量差异</td><td>faux provider 跑一轮带两工具的对话，枚举实际发出的事件</td><td><span class="badge g">6/6</span></td></tr>
 </tbody>
 </table>
 </div>
@@ -1831,7 +1833,7 @@ session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩�
 
 <div class="note">
   <b class="t">汇总</b>
-  已有 <b>28 项</b>得到运行级或 API 级实证（含 8 个验证套件、73 项检查），<b>11 项</b>仍未验证。实证集中在一条主链上：
+  已有 <b>28 项</b>得到运行级或 API 级实证（含 10 个验证套件、83 项检查），<b>11 项</b>仍未验证。实证集中在一条主链上：
   <b>内核循环 → 工具执行与错误恢复 → 会话持久化 → 缓存与成本</b>。
   而 Pi 最具辨识度的几个设计——<b>压缩、并行工具、扩展钩子、五级暴露、codemode、MCP、durable/远程</b>——本次运行都<b>没有碰到</b>。
   <b>「未验证」不等于「不可靠」，但也不等于「已验证」。</b>如果你要依赖其中某一项，就用最后一列的方法跑一遍。
