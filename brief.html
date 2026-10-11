@@ -331,7 +331,7 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
 
 <footer>
   <p><b>Pi Agent 框架速览</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜ <a href="index.html">25–30 分钟主报告</a> · <a href="full-report.html">45 分钟完整版（17 章）</a></p>
-  <p class="small">数据来源：GitHub REST API（stars / forks / contributors）+ 本地完整 git 历史统计（提交数、作者分布、代码行数）+ 仓库源码与 37 篇官方文档 + 本报告自身真实会话的逐条解析（token / 成本 / 延迟 / 错误率）。社区数据抓取于 2026-10-11。<b>N=1 单会话实测，不是性能基准</b>；结论请以你锁定版本的源码为准。</p>
+  <p class="small">数据来源：GitHub REST API（stars / forks / contributors）+ 本地完整 git 历史统计（提交数、作者分布、代码行数）+ 仓库源码与 37 篇官方文档 + 本报告自身真实会话的逐条解析（token / 成本 / 延迟 / 错误率）。社区数据抓取于 2026-10-11。<b>N=1 单会话实测，不是性能基准</b>。<br>本文的结论均标注了证据等级：<b>15 项有运行/API 级实证</b>（主链：内核循环 → 工具执行与错误恢复 → 会话持久化 → 缓存与成本），<b>18 项仅源码/文档级</b>（压缩、并行工具、扩展钩子、codemode、MCP、durable/远程均未在本次运行中触发）——详见 <a href="index.html">主报告第 14 章「结论验证矩阵」</a>。</p>
 </footer>
 </main>
 </div>

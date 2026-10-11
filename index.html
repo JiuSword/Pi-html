@@ -149,6 +149,7 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
   <a href="#s11">11 风险与选型</a>
   <a href="#s12">12 落地清单</a>
   <a href="#s13">13 实测数据（真实运行）</a>
+  <a href="#s14">14 结论验证矩阵</a>
   <a href="#appendix">附录</a>
   <div class="sep"></div>
   <a class="go" href="brief.html">→ 6 分钟速览版</a>
@@ -1166,6 +1167,85 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
   读者可以据此判断：本章数据支撑的是「内核循环 + 工具执行 + 缓存 + 会话存储」这条主链，其余章节仍是代码阅读结论。
 </div>
 
+<!-- ============ 14 ============ -->
+<h2 id="s14"><span class="num">14</span>结论验证矩阵</h2>
+<p>本文引用了大量官方声明与源码事实，但<b>只有一部分经过了真实运行验证</b>。这一章把「证据等级」逐项标出来，让你能一眼看出哪些判断可以直接信、哪些还需要自己跑一遍。</p>
+
+<div class="legend" style="margin-bottom:6px">
+  <span><i style="background:#6ee7a0"></i>实测：本次运行直接产生数据</span>
+  <span><i style="background:#4cc2ff"></i>源码：读了实现代码</span>
+  <span><i style="background:#bb9af7"></i>原文：官方文档/README 声明</span>
+  <span><i style="background:#ff7a7a"></i>未验证：本次运行未发生/未使用</span>
+</div>
+
+<h3>14.1 有实证支撑的结论</h3>
+<div class="twrap">
+<table>
+<thead><tr><th>章节</th><th>结论</th><th>等级</th><th>实证依据</th></tr></thead>
+<tbody>
+<tr><td>01</td><td>项目活跃度（6,839 commits / 315 作者 / 302 tags / 月度分布）</td><td><span class="pill g">实测</span></td><td>完整 git 历史统计，与 GitHub API 返回的 commits 数交叉一致</td></tr>
+<tr><td>01</td><td>社区规模（114,152 ★ / 14,510 forks / 299 contributors）</td><td><span class="pill b">API</span></td><td>GitHub REST API，扣取于 2026-10-11</td></tr>
+<tr><td>03</td><td>用量与成本模型（input / output / cacheRead / cacheWrite / reasoning + cost 分项）</td><td><span class="pill g">实测</span></td><td>161 次调用的 usage 全部落地该结构；<code>cacheWrite</code> 恒为 0</td></tr>
+<tr><td>03</td><td>推理内容可流式（thinking）</td><td><span class="pill g">实测</span></td><td>真实产生 41,651 reasoning token（占输出 23.9%）</td></tr>
+<tr><td>03</td><td>成本核算可用于定价分析（反推单价、缓存价差）</td><td><span class="pill g">实测</span></td><td>间接验证了多厂商统一成本模型的可用性</td></tr>
+<tr><td>04</td><td>内核循环可长时间稳定运行</td><td><span class="pill g">实测</span></td><td>3.94 h / 161 次 LLM 调用 / 153 次工具执行，无进程级故障</td></tr>
+<tr><td>05</td><td><b>工具抛错 → <code>isError</code> 结果 → 模型换方案</b></td><td><span class="pill g">实测 ★</span></td><td>13 次失败（6 类原因）全部自恢复，无一次中断任务</td></tr>
+<tr><td>05</td><td>工具结果的 <code>details</code> 承载结构化状态</td><td><span class="pill g">实测</span></td><td>176 条结果中 33 条带 details，含 <code>diff</code>/<code>patch</code>/<code>firstChangedLine</code>/<code>warnings</code> 等字段</td></tr>
+<tr><td>08</td><td><b>会话即 JSONL 树</b>（version 3 / <code>id</code>-<code>parentId</code> / 同文件追加）</td><td><span class="pill g">实测 ★</span></td><td>直接解析会话文件：版本号、条目类型、父子链均可验证</td></tr>
+<tr><td>08</td><td>会话内容为明文，可导出可解析</td><td><span class="pill g">实测</span></td><td>1.92 MB 的 <code>--export</code> HTML 即由明文 JSONL 转出</td></tr>
+<tr><td>09</td><td>CLI 可用性：<code>--list-models</code>、<code>--export</code></td><td><span class="pill g">实测</span></td><td>本次均实际执行成功</td></tr>
+<tr><td>09</td><td><b>可被第三方宿主接管</b>（SDK / RPC 层可用）</td><td><span class="pill g">实测·间接</span></td><td>本次运行在 pi-dashboard 中（非 pi 自带 TUI），且宿主注入的 <code>ask_user</code>/<code>canvas</code>/<code>browser</code> 工具被调用 <b>13 次</b></td></tr>
+<tr><td>10</td><td>CI 门禁构成与 <code>AGENTS.md</code> 规则</td><td><span class="pill g">实测</span></td><td>直接阅读 <code>.github/workflows/</code> 与仓库原文</td></tr>
+<tr><td>13</td><td>上下文线性增长 ≈1,485 token/次；1M 窗口占用 24.6%</td><td><span class="pill g">实测</span></td><td>4,036 → 246,225（182 次调用）</td></tr>
+<tr><td>13</td><td>缓存命中 99.29% 与成本结构</td><td><span class="pill g">实测</span></td><td>18.38M cacheRead 逐条汇总</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>14.2 仅源码/文档级，本次运行未验证</h3>
+<div class="twrap">
+<table>
+<thead><tr><th>章节</th><th>结论</th><th>等级</th><th>想验证就跑这个</th></tr></thead>
+<tbody>
+<tr><td>02</td><td>SessionManager 权威；给 <code>state.messages</code> 赋值不改上下文</td><td><span class="pill r">未验证</span></td><td>SDK 里赋值后取模型上下文对比</td></tr>
+<tr><td>04</td><td>并行工具执行（完成序 vs 落盘序）</td><td><span class="pill r">未发生</span></td><td>让模型一次发 2+ 个工具调用（本次 177 批<b>全部单工具</b>）</td></tr>
+<tr><td>04</td><td><code>terminate</code> 语义</td><td><span class="pill r">未验证</span></td><td>写一个返回 <code>terminate: true</code> 的工具</td></tr>
+<tr><td>04</td><td>四个钩子（<code>beforeToolCall</code> / <code>afterToolCall</code> / <code>prepareRequest</code> / <code>finishTurn</code>）</td><td><span class="pill r">未验证</span></td><td>写一个带钩子的扩展（本次未自行编写扩展）</td></tr>
+<tr><td>05</td><td>五级暴露（<code>codemode</code> / <code>deferred</code> / <code>hidden</code>）与 <code>prepareLoadout</code></td><td><span class="pill r">未验证</span></td><td><code>pi -t +codemode</code> 开启后让模型写脚本</td></tr>
+<tr><td>05</td><td>工具结果截断（2000 行 / 50KB + 完整输出路径）</td><td><span class="pill r">未触发</span></td><td><code>cat</code> 一个 &gt;2000 行的文件（本次最长结果仅 <b>546 行 / 20KB</b>）</td></tr>
+<tr><td>05</td><td>嵌套工具调用 <code>ctx.executeTool()</code> 与 <code>nestedCalls</code> 记录</td><td><span class="pill r">未验证</span></td><td>写一个内部调其它工具的工具</td></tr>
+<tr><td>05</td><td>注解驱动的审批网关</td><td><span class="pill p">文档</span></td><td>实现 <code>tool_call</code> + <code>ctx.ui.confirm</code></td></tr>
+<tr><td>06</td><td><b>压缩算法、阈值、切点规则</b></td><td><span class="pill r">未触发</span></td><td>用 128K / 200K 窗口模型跑到约第 74 / 124 次调用</td></tr>
+<tr><td>06</td><td>分支摘要（<code>/tree</code> 导航）</td><td><span class="pill r">未验证</span></td><td>用 <code>/tree</code> 跳分支</td></tr>
+<tr><td>06</td><td>技能（Skills）延迟加载</td><td><span class="pill r">未验证</span></td><td>装一个 <code>SKILL.md</code> 观察 system prompt 变化</td></tr>
+<tr><td>06</td><td><code>cacheWarming</code> 与 prompt-cache 写入</td><td><span class="pill r">未验证</span></td><td>换会报告 <code>cacheWrite</code> 的厂商（本次 <code>cacheWrite</code> 恒为 0）</td></tr>
+<tr><td>06</td><td>虚拟模型按请求路由</td><td><span class="pill r">未验证</span></td><td>注册一个 <code>registerVirtualModel()</code> 路由器</td></tr>
+<tr><td>07</td><td>codemode 沙箱与全部限额</td><td><span class="pill r">未验证</span></td><td>开启 codemode 跑一个多工具脚本</td></tr>
+<tr><td>07</td><td>MCP 集成（连接、exposure 联动、OAuth）</td><td><span class="pill r">未验证</span></td><td><code>pi mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem .</code></td></tr>
+<tr><td>08</td><td>durable / env / protocol / client / server / chord / telemetry</td><td><span class="pill r">未验证</span></td><td>跑各包 README 的 Quick Start</td></tr>
+<tr><td>09</td><td>print / JSON / RPC 三种模式</td><td><span class="pill r">未验证</span></td><td><code>pi --print "..."</code> · <code>pi --mode json</code> · <code>pi --mode rpc</code></td></tr>
+<tr><td>11</td><td>无内置沙箱、项目信任不是安全边界</td><td><span class="pill p">原文</span></td><td><code>docs/security.md</code> 原文声明</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note">
+  <b class="t">汇总</b>
+  全文 13 章共 <b>15 项结论获得运行级或 API 级实证</b>，<b>18 项仍为源码/文档级</b>。
+  实证集中在一条主链上：<b>内核循环 → 工具执行与错误恢复 → 会话持久化 → 缓存与成本</b>。
+  而 Pi 最具有辨识度的几个设计——<b>压缩、并行工具、扩展钩子、五级暴露、codemode、MCP、durable/远程</b>——本次运行都<b>没有碰到</b>，它们仍是「读代码得出的结论」。
+  <br><br>
+  这不是否定它们（其中多数在源码层面很扎实），而是把验证责任交回给你：如果你要依赖其中某一项，就用表格最后一列的方法跑一遍。
+  <b>“未验证”不等于“不可靠”，但也不等于“已验证”。</b>
+</div>
+
+<div class="warn">
+  <b class="t">一处快照说明</b>
+  本章与第 13 章的数字均为<b>成稿时快照</b>。会话在报告完成后仍在继续（截稿后调用次数已从 161 增至 182），
+  因此你如果现在去读原始会话文件，各项计数会比本文更大；<b>比率型结论（缓存命中、上下文增速、工具失败率）不受影响</b>。
+  原始会话：<code>D:\Pi\sessions\2026-10-11T02-32-26-774Z_01a128cd-ed95-74ee-bdbd-2519069ce9cf.jsonl</code>
+</div>
+
 <h2 id="appendix"><span class="num">A</span>附录</h2>
 <h3>A.1 关键文件索引</h3>
 <div class="twrap">
@@ -1194,7 +1274,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 <footer>
   <p><b>Pi Agent 框架调研报告</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜
      <a href="brief.html">6 分钟速览版</a> · <a href="full-report.html">45 分钟完整版（17 章 · 24 代码块）</a></p>
-  <p class="small">本文为「25–30 分钟精读版」：正文约 5,300 字 + 15 张表格 + 17 段代码 + 3 张图表。第 13 章数据来自本报告自身的真实运行记录（328 条目逐条解析）。引用的事件名、常量值、API 名均可在源码中直接检索验证。</p>
+  <p class="small">本文为「25–30 分钟精读版」：正文约 5,300 字 + 15 张表格 + 17 段代码 + 3 张图表。<b>第 13 章为实测数据，第 14 章为结论验证矩阵（15 项有实证 / 18 项仅源码级）</b>，均来自本报告自身真实运行的逐条解析。引用的事件名、常量值、API 名可在源码中直接检索验证。</p>
 </footer>
 
 </main>
