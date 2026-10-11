@@ -953,8 +953,73 @@ text(<span class="cs">`changed=${changed.length} read_ok=${ok}`</span>);   <span
   <b>同时它提升能力上限</b>：脚本能并行调用（<code>Promise.allSettled</code>）、能组合工具、能跨调用累积小状态，而模型不必「记住」中间态。
 </div>
 
-<h3 id="s7-3">7.3 MCP 集成</h3>
-<p>Pi <b>没有</b>用官方 MCP SDK，而是自研了一个小而独立的客户端（<code>pi-mcp</code>）：传输无关核心 + stdio 传输 + Streamable HTTP 传输 + 内存测试传输。收益是依赖面极小、可注入 <code>fetch</code>（便于代理），并能针对 Pi 的语义做适配（如把 MCP 结果转成 pi-ai 的 text/image 内容块）。</p>
+<h3 id="s7-3">7.3 MCP 集成：为什么自研一个客户端</h3>
+
+<h4>先搞清楚「MCP 客户端」是什么</h4>
+<p>MCP（Model Context Protocol）本质是 <b>JSON-RPC 2.0 之上的一个客户端–服务端协议</b>。一个 MCP 客户端要干四件事：</p>
+<div class="twrap">
+<table>
+<thead><tr><th>#</th><th>职责</th><th>具体做什么</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>传输</b></td><td><code>stdio</code>：把 server 当子进程启动，换行分隔的 JSON 走 stdin/stdout；<code>Streamable HTTP</code>：走 HTTP 流</td></tr>
+<tr><td>2</td><td><b>握手与版本协商</b></td><td>发 <code>initialize</code>（带能力声明）→ 收 server 能力 → 发 <code>notifications/initialized</code>；版本不匹配报错</td></tr>
+<tr><td>3</td><td><b>调用与消息关联</b></td><td><code>tools/list</code>、<code>tools/call</code>、<code>resources/list</code>、<code>resources/read</code>…按 <code>id</code> 匹配响应，处理超时、取消、错误</td></tr>
+<tr><td>4</td><td><b>认证</b></td><td>远程 server 的 OAuth：发现授权服务器元数据 → 动态注册客户端 → PKCE → 起本地回调端口收 code</td></tr>
+</tbody>
+</table>
+</div>
+<p><b>「自研客户端」= Pi 把这四件事自己写了一遍</b>：<code>pi-mcp</code> 共 18 个文件 / 3,244 行（<code>client.ts</code> 615 行 + Streamable HTTP 505 行 + OAuth 相关约 1,000 行）。</p>
+
+<h4>与官方 SDK 的实际区别</h4>
+<div class="twrap">
+<table>
+<thead><tr><th>维度</th><th>官方 <code>@modelcontextprotocol/sdk@1.32.1</code></th><th><code>pi-mcp</code></th></tr></thead>
+<tbody>
+<tr><td>定位</td><td>客户端 <b>+ 服务端</b> 全套</td><td><b>只做客户端</b></td></tr>
+<tr><td>运行时依赖</td><td><b>17 个</b>：express · hono · cors · express-rate-limit · ajv · ajv-formats · zod · zod-to-json-schema · jose · pkce-challenge · eventsource · eventsource-parser · raw-body · content-type · json-schema-typed · @hono/node-server · cross-spawn</td><td><b>1 个</b>：cross-spawn（Windows stdio 子进程，官方 SDK 也用它）</td></tr>
+<tr><td>传输</td><td>stdio / SSE（旧） / Streamable HTTP + 服务端多种</td><td>stdio / Streamable HTTP / <b>内存测试传输</b></td></tr>
+<tr><td>协议版本</td><td>最新 + 历史</td><td><code>2025-11-25</code> · <code>2025-06-18</code> · <code>2025-03-26</code> · <code>2024-11-05</code></td></tr>
+<tr><td>能力覆盖</td><td>prompts · resources · tools · completion · logging · 订阅 · sampling · elicitation 全套</td><td>tools · resources（list/read/templates）· roots/list · ping · 通知与 progress；<b>无 prompts / completion / logging / subscribe / elicitation</b></td></tr>
+<tr><td>消息校验</td><td>ajv + zod（两套 schema 校验器）</td><td>自写轻量协议类型与校验</td></tr>
+</tbody>
+</table>
+</div>
+<div class="note">
+  <b class="t">依赖差异的根因</b>
+  官方 SDK 带 17 个依赖，是因为它<b>同时要做服务端</b>——express / hono / cors / 限流中间件是给写 server 的人用的，ajv / zod 是两套 schema 校验器。
+  Pi 只需要客户端那一半，于是依赖从 17 个降到 1 个。
+</div>
+
+<h4>为什么不用官方 SDK（三条动机）</h4>
+<ol>
+  <li><b>体积与供应链</b>：17 个包 vs 1 个包。对一个要自包含打包的 CLI 是真实差异；Pi 的 <code>AGENTS.md</code> 明确要求「依赖当作被审查过的代码、精确锁定」。</li>
+  <li><b>语义适配成本</b>：Pi 要的是「MCP 工具 → <code>AgentTool</code>、结果 → pi-ai content blocks、OAuth 凭据 → Pi 凭据存储」；还要把工具名转成 Pi 的 identifier 规则、把 MCP 暴露级别映射进五级模型（源码里就一行 <code>codemode → deferred</code>）。包一层官方 SDK 反而更绕。</li>
+  <li><b>可测试性</b>：自研可以加一个<b>内存传输</b>，测试不需要起子进程。</li>
+</ol>
+
+<h4>代价，以及 Pi 怎么兜底（最值得学的一部分）</h4>
+<p><b>代价是能力子集</b>：如果你的 MCP server 依赖 <b>prompts</b>（斜杠命令式提示）、<b>资源变更订阅</b>、<b>sampling</b>（server 反向调模型）、<b>elicitation</b>（server 向用户提问），<b>Pi 不支持</b>。</p>
+<p><b>兜底方式</b>：Pi 用<b>官方 MCP 一致性测试套件</b>验证自己的实现——<code>@modelcontextprotocol/conformance@0.2.0-alpha.11</code>，对 3 个协议版本跑 26 个场景：</p>
+<div class="twrap">
+<table>
+<thead><tr><th>协议版本</th><th>场景</th><th>检查项</th></tr></thead>
+<tbody>
+<tr><td><code>2025-03-26</code></td><td>2 通过 / 0 失败</td><td>15 通过 / 0 失败</td></tr>
+<tr><td><code>2025-06-18</code></td><td>5 通过 / 0 失败</td><td>53 通过 / 0 失败</td></tr>
+<tr><td><code>2025-11-25</code></td><td>16 通过 / <b>3 失败</b></td><td><b>193 通过 / 8 失败</b></td></tr>
+</tbody>
+</table>
+</div>
+<p>已知失败<b>写在 README 里</b>（不是藏着）：不支持 elicitation；用动态客户端注册而非 CIMD；<code>auth/scope-retry-limit</code> 是<b>设计使然</b>失败；不支持无状态的 <code>2026-07-28</code>。结果作为 <code>baseline.json</code> 提交进仓库，CI 有独立 job——<b>基线里通过的检查一旦变失败、出现未列出的失败、或场景根本没跑，都会让构建失败</b>。</p>
+<div class="ok">
+  <b class="t">比自研更值得抄的一点</b>
+  <b>「重写协议 → 跑官方一致性套件 → 把基线提交进仓库」</b>。任何「不用官方库、自己实现规范」的决定，都必须回答「你怎么证明你跟规范一致」——
+  Pi 的答案是：跑官方套件、公开已知失败、把结果固化成可回归的基线。<b>子集并不可怕，无法度量的子集才可怕。</b>
+</div>
+
+<h4>与 Pi 的集成面</h4>
+<p>连上之后，Pi 要做的是把 MCP 世界的形状「翻译」成 Pi 世界的形状：连不上的 server 不影响启动；同名时项目配置覆盖用户配置；
+server 声明的 <code>exposure</code> 直接决定工具是写进 prompt 还是只对脚本可见（这正是 7.1 与 7.2 的连接点）。</p>
 <div class="twrap">
 <table>
 <thead><tr><th>配置面</th><th>说明</th></tr></thead>
