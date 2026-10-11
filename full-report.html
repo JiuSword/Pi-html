@@ -284,7 +284,7 @@ footer.end{margin-top:70px;padding-top:26px;border-top:1px solid var(--line);col
     到应用层 <b>pi-coding-agent</b> 的工具/扩展/会话体系，再到 <b>codemode</b>、<b>MCP</b> 与持久化/远程执行栈。
     全文结论均来自仓库源码、官方文档与完整 git 历史的交叉核对，面向需要做技术选型或二次开发的 Agent 工程师。
   </p>
-  <p class="small">阅读阶梯：<a href="brief.html">6 分钟速览</a> · <a href="index.html">本系列的 25–30 分钟精读版</a>（含架构图与关键代码）</p>
+  <p class="small">阅读阶梯：<a href="brief.html">6 分钟速览</a> · <a href="index.html">本系列的 30–35 分钟精读版</a>（含架构图与关键代码）</p>
 
   <div class="metagrid">
     <div class="m"><div class="k">调研对象</div><div class="v">earendil-works/pi</div></div>
@@ -1768,7 +1768,44 @@ session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩�
 <p>本文引用大量官方声明与源码事实，但<b>只有一部分经过真实运行验证</b>。本章逐项标出证据等级，让你能一眼看出哪些判断可以直接信、哪些需要自己跑一遍。
 等级说明：<span class="badge g">实测</span> 本次运行直接产生数据　<span class="badge b">源码</span> 读了实现代码　<span class="badge p">原文</span> 官方文档/README 声明　<span class="badge r">未验证</span> 本次运行未发生/未使用。</p>
 
-<h3>15.1 有实证支撑（15 项）</h3>
+<h3>15.1 有实证支撑（28 项，完整表见主报告第 14 章）</h3>
+<p class="small">其中 <b>16 项</b>来自本次额外编写的 <b>8 个验证套件、共 73 项检查（全部通过）</b>：</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>套件</th><th>覆盖的结论</th><th>验证方法</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>v1 循环层</td><td>并行工具执行、<code>terminate</code> 语义、四个钩子</td><td><code>pi-agent-core</code> + faux provider（脚本化响应）</td><td><span class="badge g">12/12</span></td></tr>
+<tr><td>v2 工具·技能·压缩·会话树</td><td>截断与指路、技能延迟加载、压缩阈值与切点规则、<code>branch()</code></td><td>直接调用导出的工具/压缩/会话函数</td><td><span class="badge g">21/21</span></td></tr>
+<tr><td>v3 Codemode 沙箱</td><td>无 Node/网络/定时器、超时、store/load、限额常量</td><td>直接构造 <code>CodemodeSandbox</code> 执行脚本</td><td><span class="badge g">9/9</span></td></tr>
+<tr><td>v4 MCP 客户端</td><td>握手、tools/list、tools/call、通知、错误码</td><td><b>手写最小 stdio MCP server</b> 做真实往返</td><td><span class="badge g">8/8</span></td></tr>
+<tr><td>v5 真实扩展</td><td>五级暴露、审批钩子、嵌套调用与 <code>nestedCalls</code>、SessionManager 权威</td><td>内联扩展（6 工具 + 2 钩子）+ <b>真实模型</b>对话一轮</td><td><span class="badge g">11/11</span></td></tr>
+<tr><td>v6 prepareLoadout</td><td><code>descriptions</code> / <code>hiddenDeclarations</code> 到达线上载荷</td><td>捕获 <code>before_provider_request</code> 真实载荷</td><td><span class="badge g">4/4</span></td></tr>
+<tr><td>v7 Codemode 集成</td><td><b>脚本内的工具调用不进转录</b></td><td>注入 codemode 扩展，真实模型写脚本后查转录</td><td><span class="badge g">5/5</span></td></tr>
+<tr><td>v8 CLI 三模式</td><td>print / JSON / RPC</td><td>直接启动 CLI（需清除继承的 <code>PI_*</code> 环境变量）</td><td><span class="badge g">3/3</span></td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">完整 28 项逐条实证表见主报告第 14.1 节。</p>
+
+<h3>15.2 仍未验证（11 项）</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>章</th><th>未验证的结论</th><th>原因 / 怎么自己验</th></tr></thead>
+<tbody>
+<tr><td>6</td><td>压缩的<b>真实自动触发</b></td><td>需小窗口模型跑到约第 74/124 次调用，或用 <code>modelOverrides</code> 把窗口改小</td></tr>
+<tr><td>6</td><td>分支摘要的 LLM 生成（<code>generateBranchSummary</code>）</td><td>需一次真实摘要调用（<code>/tree</code> 导航）</td></tr>
+<tr><td>6</td><td><b>虚拟模型路由</b>（选择/派发分离）</td><td>需注册路由并跑一轮对比</td></tr>
+<tr><td>6</td><td><code>cacheWarming</code> 与 prompt-cache 写入</td><td>DeepSeek 不报 <code>cacheWrite</code>（恒为 0），换厂商即可</td></tr>
+<tr><td>5</td><td>注解审批的完整策略组合</td><td>已验证「注解→阻止」链路，策略组合未测</td></tr>
+<tr><td>7</td><td>codemode 的 MCP 结构化内容 / <code>models</code> / Cloudflare 远端沙箱</td><td>需对应 provider 与 Cloudflare 环境</td></tr>
+<tr><td>7</td><td><code>tool_search</code> 按需搜索激活</td><td>已验证 <code>deferred</code> 可调用，搜索扩展本身未跑</td></tr>
+<tr><td>8</td><td>durable / env / protocol / client / server / telemetry</td><td><b>包未随安装分发</b>，无法导入</td></tr>
+<tr><td>8</td><td>远程执行（<code>pi-env</code> 的 SSH daemon）</td><td>需一台可 SSH 的远端机器</td></tr>
+<tr><td>11</td><td>无内置沙箱、项目信任不是安全边界</td><td>文档原文声明，非可测行为</td></tr>
+<tr><td>12</td><td>与同类方案的对比表</td><td>基于公开认知，非同口径实测</td></tr>
+</tbody>
+</table>
+</div>
 <div class="tablewrap">
 <table>
 <thead><tr><th>章</th><th>结论</th><th>等级</th><th>实证依据</th></tr></thead>
@@ -1792,36 +1829,9 @@ session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩�
 </table>
 </div>
 
-<h3>15.2 仅源码/文档级，未获运行验证（18 项）</h3>
-<div class="tablewrap">
-<table>
-<thead><tr><th>章</th><th>结论</th><th>等级</th><th>想验证就跑这个</th></tr></thead>
-<tbody>
-<tr><td>2</td><td>SessionManager 权威；<code>state.messages</code> 赋值不改上下文</td><td><span class="badge r">未验证</span></td><td>SDK 里赋值后取模型上下文对比</td></tr>
-<tr><td>4</td><td>并行工具执行（完成序 vs 落盘序）</td><td><span class="badge r">未发生</span></td><td>让模型一次发 2+ 工具调用（本次 177 批<b>全部单工具</b>）</td></tr>
-<tr><td>4</td><td><code>terminate</code> 终止语义</td><td><span class="badge r">未验证</span></td><td>写一个返回 <code>terminate: true</code> 的工具</td></tr>
-<tr><td>4</td><td>四个钩子（<code>beforeToolCall</code>/<code>afterToolCall</code>/<code>prepareRequest</code>/<code>finishTurn</code>）</td><td><span class="badge r">未验证</span></td><td>写一个带钩子的扩展</td></tr>
-<tr><td>5</td><td>五级暴露（<code>codemode</code>/<code>deferred</code>/<code>hidden</code>）与 <code>prepareLoadout</code></td><td><span class="badge r">未验证</span></td><td><code>pi -t +codemode</code> 开启后让模型写脚本</td></tr>
-<tr><td>5</td><td>工具结果截断（2000 行 / 50KB + 完整输出路径）</td><td><span class="badge r">未触发</span></td><td><code>cat</code> 一个 &gt;2000 行的文件（本次最长仅 <b>546 行 / 20KB</b>）</td></tr>
-<tr><td>5</td><td>嵌套调用 <code>ctx.executeTool()</code> 与 <code>nestedCalls</code> 记录</td><td><span class="badge r">未验证</span></td><td>写一个内部调其它工具的工具</td></tr>
-<tr><td>5</td><td>注解驱动的审批网关</td><td><span class="badge p">文档</span></td><td>实现 <code>tool_call</code> + <code>ctx.ui.confirm</code></td></tr>
-<tr><td>6</td><td><b>压缩算法、阈值、切点规则</b></td><td><span class="badge r">未触发</span></td><td>用 128K / 200K 窗口模型跑到约第 74 / 124 次调用</td></tr>
-<tr><td>6</td><td>分支摘要（<code>/tree</code> 导航）</td><td><span class="badge r">未验证</span></td><td>用 <code>/tree</code> 跳分支</td></tr>
-<tr><td>6</td><td>技能（Skills）延迟加载</td><td><span class="badge r">未验证</span></td><td>装一个 <code>SKILL.md</code> 观察 system prompt 变化</td></tr>
-<tr><td>6</td><td><code>cacheWarming</code> 与 prompt-cache 写入</td><td><span class="badge r">未验证</span></td><td>换会报告 <code>cacheWrite</code> 的厂商（本次恒为 0）</td></tr>
-<tr><td>6</td><td>虚拟模型按请求路由</td><td><span class="badge r">未验证</span></td><td>注册一个 <code>registerVirtualModel()</code> 路由器</td></tr>
-<tr><td>7</td><td>codemode 沙箱与全部限额</td><td><span class="badge r">未验证</span></td><td>开启 codemode 跑一个多工具脚本</td></tr>
-<tr><td>7</td><td>MCP 集成（连接、exposure 联动、OAuth）</td><td><span class="badge r">未验证</span></td><td><code>pi mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem .</code></td></tr>
-<tr><td>9</td><td>durable / env / protocol / client / server / chord / telemetry</td><td><span class="badge r">未验证</span></td><td>跑各包 README 的 Quick Start</td></tr>
-<tr><td>10</td><td>print / JSON / RPC 三种模式</td><td><span class="badge r">未验证</span></td><td><code>pi --print "..."</code> · <code>pi --mode json</code> · <code>pi --mode rpc</code></td></tr>
-<tr><td>12</td><td>无内置沙箱、项目信任不是安全边界</td><td><span class="badge p">原文</span></td><td><code>docs/security.md</code> 原文声明</td></tr>
-</tbody>
-</table>
-</div>
-
 <div class="note">
   <b class="t">汇总</b>
-  <b>15 项</b>获得运行级或 API 级实证，<b>18 项</b>仍为源码/文档级。实证集中在一条主链上：
+  已有 <b>28 项</b>得到运行级或 API 级实证（含 8 个验证套件、73 项检查），<b>11 项</b>仍未验证。实证集中在一条主链上：
   <b>内核循环 → 工具执行与错误恢复 → 会话持久化 → 缓存与成本</b>。
   而 Pi 最具辨识度的几个设计——<b>压缩、并行工具、扩展钩子、五级暴露、codemode、MCP、durable/远程</b>——本次运行都<b>没有碰到</b>。
   <b>「未验证」不等于「不可靠」，但也不等于「已验证」。</b>如果你要依赖其中某一项，就用最后一列的方法跑一遍。
@@ -1906,7 +1916,7 @@ session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩�
 </div>
 
 <footer class="end">
-  <p><b>Pi Agent 框架深度调研报告</b> · 基线 commit <code>ea448f4</code> · 版本 <code>v1.1.0</code> · MIT ｜ <a href="index.html">25–30 分钟精读版</a> · <a href="brief.html">6 分钟速览</a></p>
+  <p><b>Pi Agent 框架深度调研报告</b> · 基线 commit <code>ea448f4</code> · 版本 <code>v1.1.0</code> · MIT ｜ <a href="index.html">30–35 分钟精读版</a> · <a href="brief.html">6 分钟速览</a></p>
   <p class="small">报告由源码与官方文档整理而成；数据统计脚本基于完整 git 历史。项目内引用均为原文或忠实改写，代码片段为便于阅读做了删减与注释补充。</p>
 </footer>
 
