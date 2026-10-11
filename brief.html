@@ -226,8 +226,8 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
     <span class="src">src/core/compaction/{compaction,branch-summarization}.ts</span>
   </div>
   <div class="key">
-    <h4>5. Codemode：把编排下沉到沙箱</h4>
-    <p>模型写一段 JS，在 QuickJS(WASM) 里调用工具，<b>中间结果完全不进上下文</b>，只回传脚本输出。「列 200 个文件 → 过滤 → 只读 3 个」这类流程的 token 成本从 O(n) 降到 O(1)。更关键的是：<b>codemode 自己就是一个普通扩展</b>，只用了 <code>exposure</code> + <code>prepareLoadout</code> + <code>ctx.executeTool()</code> 三样公开 API，没有特权接口。</p>
+    <h4>5. Codemode：让模型「写程序调工具」</h4>
+    <p><b>不是「多调几次工具」，而是模型写一段 JS 去调用工具</b>——脚本跑在 QuickJS(WASM) 沙箱里，<b>脚本内部的调用与结果都不进上下文</b>，只回最终输出。「列 200 个文件 → 过滤 → 只读 3 个」这类流程，中间产物从 ~1.4 万 token 降到约 100 token。两个容易误解的点：沙箱是<b>能力边界不是安全边界</b>（真正的隔离靠容器），且代价是<b>中间过程对模型不可见</b>——你得替它预先决定「什么值得看」。更关键的是：<b>codemode 自己就是一个普通扩展</b>，只用了 <code>exposure</code> + <code>prepareLoadout</code> + <code>ctx.executeTool()</code> 三样公开 API。</p>
     <span class="src">packages/codemode（QuickJS）· src/extensions/codemode/</span>
   </div>
 </div>

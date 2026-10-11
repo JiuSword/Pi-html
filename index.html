@@ -143,6 +143,9 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
   <a class="lv2" href="#s6-2">6.2 压缩算法</a>
   <a class="lv2" href="#s6-4">6.4 缓存与虚拟模型</a>
   <a href="#s7">7 Codemode 与 MCP</a>
+  <a class="lv2" href="#s7-1">7.1 它到底是什么</a>
+  <a class="lv2" href="#s7-2">7.2 沙箱与限额</a>
+  <a class="lv2" href="#s7-3">7.3 MCP 集成</a>
   <a href="#s8">8 会话、持久化与远程</a>
   <a href="#s9">9 接入方式</a>
   <a href="#s10">10 工程实践借鉴</a>
@@ -848,8 +851,72 @@ diffSystemPromptSections(current, desired)
 <!-- ============ 7 ============ -->
 <h2 id="s7"><span class="num">07</span>Codemode 与 MCP</h2>
 
-<h3 id="s7-1">7.1 Codemode：把编排下沉到沙箱</h3>
-<p>动机很直接：<b>多步工具调用的中间结果不必进入模型上下文</b>。模型写一段 JS 在沙箱里调用工具、过滤/聚合数据，只把结论回传。官方定位是：<i>在 QuickJS(WebAssembly) 里运行模型写的 JavaScript，唯一能力是调用被注入的工具</i>。</p>
+<h3 id="s7-1">7.1 Codemode 到底是什么</h3>
+<p><b>一句话：它不是让模型「多调用几次工具」，而是让模型「写一段程序去调用工具」。</b>这段程序跑在沙箱里，程序内部的每一次工具调用与返回<b>都不进入对话历史</b>，只有程序最终输出/返回的内容回到模型。</p>
+
+<div class="note">
+  <b class="t">一个类比</b>
+  普通 tool calling 里，模型每做一步都必须把结果「念进会议纪要」——而纪要是永久的，每轮对话都要重读。
+  Codemode 相当于给模型一间带白板的小房间：它可以在里面反复翻资料、筛选、计算、并行调用，<b>出来时只汇报结论</b>。
+</div>
+
+<h4>模型实际看到的是什么</h4>
+<p>这个工具的入参只有一个字符串字段，<b>不是参数化的 JSON schema</b>（源码 <code>coding-agent/src/extensions/codemode/tool.ts:90</code>）：</p>
+<div class="codewrap">
+  <div class="codehead"><span>codemode 工具的声明</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre>codemodeSchema = Type.Object({
+  code: Type.String({ description: <span class="cs">"Raw JavaScript source."</span> }),
+});
+
+<span class="cm">// 模型看到的 description 开头（原文）：</span>
+<span class="cm">// Run JavaScript that calls other tools. The input is raw JavaScript (not JSON, no</span>
+<span class="cm">// code fence), run as an async function body in a QuickJS sandbox: top-level `await`</span>
+<span class="cm">// and `return` work. No Node, file system, network, or timers.</span></pre>
+</div>
+
+<h4>同一个任务，两种做法的差别</h4>
+<p>任务：在 300 个文件的仓库里找出所有 TODO 并按目录归类。</p>
+<div class="twrap">
+<table>
+<thead><tr><th></th><th>普通 tool calling</th><th>Codemode</th></tr></thead>
+<tbody>
+<tr><td>模型的动作</td><td>调 <code>grep</code> → 读结果 → 调 <code>read</code> ×5 → 读结果 → 汇总（多轮）</td><td>写一段 ~6 行脚本，<b>一次调用</b></td></tr>
+<tr><td>进入对话历史的中间产物</td><td>grep 命中 200 行（≈4k token）+ 5 个文件片段（≈10k token）</td><td><b>0</b>——脚本内部的调用与结果都不入历史</td></tr>
+<tr><td>模型最终看到</td><td>上述 ~1.4 万 token 的原文</td><td>脚本 <code>text()</code> 出的 200 字归类结果（≈100 token）</td></tr>
+<tr><td>后续每轮成本</td><td>这 1.4 万 token 永久留在上下文，每轮重发（缓存命中，但仍占窗口）</td><td>只有那 100 token</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">数字为量级示意，不是本次会话实测。</p>
+
+<h4>三个最容易误解的点</h4>
+<div class="twrap">
+<table>
+<thead><tr><th>误解</th><th>实际</th></tr></thead>
+<tbody>
+<tr><td>「沙箱是安全边界」</td><td><b>它是能力边界，不是安全边界。</b>脚本里没有 Node、文件系统、网络、定时器，<code>eval</code>/<code>Function</code> 也只能在同一 VM 内产生更多代码，能力<b>只有</b>被注入的 <code>tools.*</code>。它不是「给模型一个 shell」，而是「给模型一张草稿纸，纸上唯一的权力是你本来就已经允许它调用的那些工具」。<b>真正的安全边界仍在部署层</b>（第 11 章）</td></tr>
+<tr><td>「跑在沙箱里所以很安全/不产生副作用」</td><td><b>工具真的会执行、副作用真的会发生。</b>脚本崩溃前已完成的调用<b>不会回滚</b>（与数据库事务不同）；脚本结束时仍在运行的调用被取消，未 await 的 Promise 被丢弃</td></tr>
+<tr><td>「中间结果不进上下文，稳赚」</td><td><b>代价是中间过程对模型不可见。</b>如果中间数据里有异常（某文件权限报错、返回格式不对），脚本没 <code>text()</code> 出来，模型就<b>永远不知道</b>。用它的前提是：<b>你得替模型预先决定「什么值得看」</b>。需要模型逐步观察中间结果再改变策略的任务，直接调工具反而更对</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>什么时候该用 / 不该用</h4>
+<div class="twrap">
+<table>
+<thead><tr><th>场景</th><th>推荐</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>多步 / 批量 / 需要过滤聚合</td><td><span class="pill g">用</span></td><td>列目录→筛选→批量读这类流程，中间产物是纯浪费</td></tr>
+<tr><td>需要并发</td><td><span class="pill g">用</span></td><td>脚本里 <code>Promise.allSettled</code> 一次打多个工具，模型无法自己并发</td></tr>
+<tr><td>工具数量巨大（多个 MCP server）</td><td><span class="pill g">用</span></td><td>MCP 可声明 <code>exposure: "codemode"</code>，工具不写入 prompt，<b>挂 3 个还是 30 个 server，系统提示词体积几乎不变</b></td></tr>
+<tr><td>单步简单调用</td><td><span class="pill a">不用</span></td><td>直接调更直接，写脚本反而多一层</td></tr>
+<tr><td>需要逐步观察中间结果并改变策略</td><td><span class="pill a">不用</span></td><td>中间过程对模型不可见（见上表第三行）</td></tr>
+<tr><td>需要在中间插人工确认</td><td><span class="pill a">不用</span></td><td>脚本是一口气跑完的，没有交互点</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="s7-2">7.2 沙箱形态、脚本环境与限额</h3>
 <p>它提供三种沙箱，共享同一套 API 与结果格式：<code>CodemodeSandbox</code>（Node/Bun，<b>每次执行一个 worker thread</b>）、<code>RemoteCodemodeSandbox</code>（Cloudflare Workers / Durable Object，可远程执行）、<code>InlineCodemodeSandbox</code>（调用线程内，会阻塞调用方）。</p>
 
 <div class="codewrap">
@@ -886,7 +953,7 @@ text(<span class="cs">`changed=${changed.length} read_ok=${ok}`</span>);   <span
   <b>同时它提升能力上限</b>：脚本能并行调用（<code>Promise.allSettled</code>）、能组合工具、能跨调用累积小状态，而模型不必「记住」中间态。
 </div>
 
-<h3 id="s7-2">7.2 MCP 集成</h3>
+<h3 id="s7-3">7.3 MCP 集成</h3>
 <p>Pi <b>没有</b>用官方 MCP SDK，而是自研了一个小而独立的客户端（<code>pi-mcp</code>）：传输无关核心 + stdio 传输 + Streamable HTTP 传输 + 内存测试传输。收益是依赖面极小、可注入 <code>fetch</code>（便于代理），并能针对 Pi 的语义做适配（如把 MCP 结果转成 pi-ai 的 text/image 内容块）。</p>
 <div class="twrap">
 <table>

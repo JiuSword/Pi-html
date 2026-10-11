@@ -1172,9 +1172,50 @@ pi -e npm:@example/pi-tools   <span class="c-cm"># 单次试用</span></pre>
 <!-- ==================== 8 ==================== -->
 <h2 id="s8"><span class="num">08</span>Codemode 与 MCP</h2>
 
-<h3 id="s8-1">8.1 Codemode：把编排下沉到脚本</h3>
-<p>动机很直接：<b>多步工具调用的中间结果不必进入模型上下文</b>。模型写一段 JS，在沙箱里调用工具、过滤/聚合数据，只把结论回传。官方 README 的定位是：<i>在 QuickJS(WebAssembly) 里运行模型写的 JavaScript，唯一能力是调用被注入的工具</i>。</p>
+<h3 id="s8-1">8.1 Codemode 到底是什么</h3>
+<p><b>一句话：它不是让模型「多调用几次工具」，而是让模型「写一段程序去调用工具」。</b>程序跑在沙箱里，内部的每一次工具调用与返回<b>都不进入对话历史</b>，只有程序最终输出/返回的内容回到模型。</p>
 
+<div class="note">
+  <b class="t">一个类比</b>
+  普通 tool calling 里，模型每做一步都必须把结果「念进会议纪要」——而纪要是永久的，每轮都要重读。
+  Codemode 相当于给模型一间带白板的小房间：它能在里面反复翻资料、筛选、计算、并行调用，<b>出来时只汇报结论</b>。
+  官方 README 的定位：<i>在 QuickJS(WebAssembly) 里运行模型写的 JavaScript，唯一能力是调用被注入的工具</i>。
+</div>
+
+<p><b>模型实际看到的入参只有一个字符串字段</b>，不是参数化的 JSON schema（源码 <code>tool.ts:90</code>）：
+<code>Type.Object({ code: Type.String({ description: "Raw JavaScript source." }) })</code> —— 原始 JS 源码，不是 JSON、不要 markdown 围栏，作为 async 函数体执行，顶层 <code>await</code>/<code>return</code> 可用。</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th></th><th>普通 tool calling</th><th>Codemode</th></tr></thead>
+<tbody>
+<tr><td>同一个任务：在 300 个文件的仓库里找 TODO 并归类</td>
+    <td>调 <code>grep</code> → 读结果 → 调 <code>read</code> ×5 → 读结果 → 汇总（多轮）</td>
+    <td>写一段 ~6 行脚本，<b>一次调用</b></td></tr>
+<tr><td>进入对话历史的中间产物</td><td>grep 命中 200 行（≈4k token）+ 5 个文件片段（≈10k token）</td><td><b>0</b>——脚本内部的调用与结果都不入历史</td></tr>
+<tr><td>模型最终看到</td><td>上述 ~1.4 万 token 原文</td><td>脚本 <code>text()</code> 出的 200 字结果（≈100 token）</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">数字为量级示意，非本次会话实测。</p>
+
+<h4>三个最容易误解的点</h4>
+<div class="tablewrap">
+<table>
+<thead><tr><th>误解</th><th>实际</th></tr></thead>
+<tbody>
+<tr><td>「沙箱是安全边界」</td><td><b>它是能力边界，不是安全边界。</b>脚本里没有 Node、文件系统、网络、定时器，<code>eval</code>/<code>Function</code> 也只能在同一 VM 内产生更多代码，能力只有注入的 <code>tools.*</code>。<b>真正的安全边界仍在部署层。</b></td></tr>
+<tr><td>「跑在沙箱里所以无副作用」</td><td><b>工具真的会执行、副作用真的会发生</b>，脚本崩溃前已完成的调用<b>不会回滚</b>；脚本结束时仍在运行的调用被取消。</td></tr>
+<tr><td>「中间结果不进上下文，稳赚」</td><td><b>代价是中间过程对模型不可见</b>：中间数据里的异常若未被 <code>text()</code> 输出，模型永远不知道。用它就要<b>替模型预先决定「什么值得看」</b>。</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>与 MCP 的组合拳</b>：MCP server 可声明 <code>exposure: "codemode"</code>，工具<b>不写入 prompt</b>、只对脚本可见，靠 <code>ALL_TOOLS</code>/<code>searchTools()</code> 在运行时发现。因此挂 3 个还是 30 个 server，<b>系统提示词体积几乎不变</b>。
+<b>该用</b>：多步/批量/需过滤聚合、需并发（<code>Promise.allSettled</code>）、工具数量巨大。
+<b>不该用</b>：单步简单调用、需逐步观察中间结果再改变策略、需插人工确认。</p>
+
+<h4>沙箱形态与限额</h4>
 <div class="tablewrap">
 <table>
 <thead><tr><th>运行环境</th><th>沙箱类</th><th>导入自</th><th>执行位置</th></tr></thead>
