@@ -1,0 +1,1781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Agent 框架深度调研报告 | 面向 Agent 开发工程师</title>
+<meta name="description" content="Pi（earendil-works/pi）Agent 框架源码级调研：agent 循环、模型抽象层、工具系统、扩展体系、上下文工程、codemode、MCP、会话持久化与远程执行。">
+<style>
+:root{
+  --bg:#0a0e13;
+  --bg-2:#0e141b;
+  --panel:#111923;
+  --panel-2:#151f2b;
+  --line:#1e2b39;
+  --line-2:#27384a;
+  --fg:#dde7f2;
+  --fg-2:#b6c4d4;
+  --muted:#7d8fa3;
+  --accent:#4cc2ff;
+  --accent-dim:#1b3a52;
+  --green:#6ee7a0;
+  --amber:#f5b657;
+  --red:#ff7a7a;
+  --purple:#bb9af7;
+  --cyan:#5ce1e6;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --radius:10px;
+  --sidebar-w:274px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+  font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 82% -8%,rgba(76,194,255,.09),transparent 60%),radial-gradient(900px 500px at 8% 4%,rgba(187,154,247,.07),transparent 55%);
+  background-attachment:fixed;
+}
+#progress{position:fixed;top:0;left:0;height:2px;width:0;background:linear-gradient(90deg,var(--accent),var(--purple));z-index:60;transition:width .1s linear}
+
+/* ---------- layout ---------- */
+.wrap{display:flex;align-items:flex-start;gap:0;max-width:1560px;margin:0 auto}
+nav.toc{
+  position:sticky;top:0;flex:0 0 var(--sidebar-w);width:var(--sidebar-w);
+  height:100vh;overflow-y:auto;padding:26px 14px 60px 22px;
+  border-right:1px solid var(--line);background:rgba(10,14,19,.72);backdrop-filter:blur(10px);
+}
+nav.toc .brand{font-size:13px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+nav.toc .brand b{color:var(--accent);letter-spacing:.06em}
+nav.toc .sub{font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.5}
+nav.toc a{
+  display:block;color:var(--fg-2);text-decoration:none;font-size:13.2px;
+  padding:5px 10px;border-radius:7px;border-left:2px solid transparent;transition:.15s;
+}
+nav.toc a:hover{background:var(--panel);color:#fff}
+nav.toc a.active{background:linear-gradient(90deg,var(--accent-dim),transparent);color:#fff;border-left-color:var(--accent)}
+nav.toc a.lv2{padding-left:22px;font-size:12.6px;color:var(--muted)}
+nav.toc a.lv2:hover{color:var(--fg)}
+nav.toc .grp{margin-top:14px}
+main{flex:1 1 auto;min-width:0;padding:0 46px 140px}
+@media (max-width:1080px){
+  nav.toc{display:none}
+  main{padding:0 18px 100px}
+}
+
+/* ---------- hero ---------- */
+header.hero{padding:74px 0 40px;border-bottom:1px solid var(--line);margin-bottom:44px}
+.eyebrow{display:flex;align-items:center;gap:10px;font-size:12.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+.eyebrow span.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+h1{font-size:clamp(30px,4.4vw,50px);line-height:1.14;margin:0 0 16px;letter-spacing:-.02em;font-weight:700}
+h1 .grad{background:linear-gradient(92deg,var(--accent),var(--purple) 72%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:17.5px;color:var(--fg-2);max-width:76ch;margin:0 0 30px}
+.metagrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:10px}
+.metagrid .m{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.metagrid .k{font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.metagrid .v{font-size:14px;font-family:var(--mono);color:var(--fg);word-break:break-all}
+.metagrid .v small{color:var(--muted);font-family:var(--sans)}
+
+/* ---------- typography ---------- */
+h2{
+  font-size:26px;margin:66px 0 6px;padding-top:12px;letter-spacing:-.01em;
+  border-top:1px solid var(--line);scroll-margin-top:20px;
+}
+h2 .num{font-family:var(--mono);font-size:15px;color:var(--accent);margin-right:12px;font-weight:500}
+h2:first-of-type{border-top:0}
+h3{font-size:18.5px;margin:36px 0 10px;color:#fff;scroll-margin-top:20px}
+h3::before{content:"▍";color:var(--accent);margin-right:8px;font-size:15px}
+h4{font-size:15.5px;margin:24px 0 8px;color:var(--cyan);font-weight:600}
+p{margin:10px 0}
+a{color:var(--accent);text-decoration:none;border-bottom:1px dotted rgba(76,194,255,.4)}
+a:hover{border-bottom-style:solid}
+strong{color:#fff;font-weight:600}
+em{color:var(--amber);font-style:normal}
+ul,ol{margin:10px 0;padding-left:24px}
+li{margin:5px 0}
+li::marker{color:var(--muted)}
+hr{border:0;border-top:1px solid var(--line);margin:34px 0}
+code{
+  font-family:var(--mono);font-size:.86em;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:#cfe6ff;
+}
+kbd{font-family:var(--mono);font-size:11.5px;background:#1a2430;border:1px solid var(--line-2);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--fg-2)}
+
+/* ---------- code blocks ---------- */
+.codewrap{position:relative;margin:16px 0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#080c11}
+.codehead{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--line);font-size:11.6px;letter-spacing:.06em;color:var(--muted);font-family:var(--mono);text-transform:uppercase}
+.codehead .lang{color:var(--purple)}
+.copy{background:transparent;border:1px solid var(--line-2);color:var(--muted);border-radius:5px;font-size:11px;padding:2px 9px;cursor:pointer;font-family:var(--mono);transition:.15s}
+.copy:hover{border-color:var(--accent);color:var(--accent)}
+pre{margin:0;padding:15px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.6px;line-height:1.68;color:#d3e2f2;tab-size:2}
+pre::-webkit-scrollbar{height:8px}
+pre::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:4px}
+.c-kw{color:#ff9d7a}.c-str{color:#a8e39a}.c-cm{color:#5f7288;font-style:italic}.c-ty{color:#7fd1ff}.c-num{color:#e5c07b}.c-fn{color:#c9a6ff}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:var(--radius)}
+table{width:100%;border-collapse:collapse;font-size:13.4px;min-width:520px}
+th{background:var(--panel);text-align:left;padding:10px 13px;font-weight:600;color:#fff;border-bottom:1px solid var(--line-2);white-space:nowrap;font-size:12.6px;letter-spacing:.03em}
+td{padding:9px 13px;border-bottom:1px solid var(--line);color:var(--fg-2);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:nth-child(even){background:rgba(255,255,255,.014)}
+tbody tr:hover{background:rgba(76,194,255,.05)}
+td code{font-size:12px;white-space:nowrap}
+td.num{font-family:var(--mono);text-align:right;white-space:nowrap;color:var(--fg)}
+
+/* ---------- callouts ---------- */
+.note,.warn,.insight,.quote{
+  margin:18px 0;padding:13px 16px 13px 17px;border-radius:0 var(--radius) var(--radius) 0;
+  border-left:3px solid var(--accent);background:linear-gradient(90deg,rgba(76,194,255,.08),rgba(76,194,255,.015));
+  font-size:14.2px;color:var(--fg-2);
+}
+.warn{border-left-color:var(--amber);background:linear-gradient(90deg,rgba(245,182,87,.09),rgba(245,182,87,.015))}
+.insight{border-left-color:var(--green);background:linear-gradient(90deg,rgba(110,231,160,.085),rgba(110,231,160,.015))}
+.quote{border-left-color:var(--purple);background:linear-gradient(90deg,rgba(187,154,247,.085),rgba(187,154,247,.015));font-style:italic}
+.note .t,.warn .t,.insight .t,.quote .t{display:block;font-style:normal;font-weight:600;color:#fff;font-size:12.4px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
+.warn .t{color:var(--amber)}.insight .t{color:var(--green)}.quote .t{color:var(--purple)}
+
+/* ---------- cards / tiles ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:12px;margin:20px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;transition:.16s}
+.card:hover{border-color:var(--line-2);transform:translateY(-2px)}
+.card .n{font-family:var(--mono);font-size:11.5px;color:var(--accent);letter-spacing:.1em;margin-bottom:7px}
+.card h5{margin:0 0 6px;font-size:14.8px;color:#fff}
+.card p{margin:0;font-size:13.2px;color:var(--muted);line-height:1.62}
+
+.tl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0}
+.tl-grid .s{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 13px;text-align:center}
+.tl-grid .s .big{font-family:var(--mono);font-size:22px;color:var(--accent);display:block;line-height:1.25}
+.tl-grid .s .lbl{font-size:11.8px;color:var(--muted)}
+
+/* ---------- architecture diagram ---------- */
+.arch{margin:24px 0;border:1px solid var(--line);border-radius:var(--radius);padding:18px;background:linear-gradient(180deg,var(--bg-2),#080c11)}
+.layer{display:flex;align-items:stretch;gap:12px;margin:10px 0}
+.layer .tag{
+  flex:0 0 104px;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  border-radius:8px;padding:8px 6px;font-size:11.6px;text-align:center;line-height:1.35;
+  background:var(--panel-2);border:1px solid var(--line-2);color:var(--muted);font-family:var(--mono);
+}
+.layer .tag b{display:block;color:var(--fg);font-size:12.4px;font-family:var(--sans)}
+.layer .boxes{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:9px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:12.6px}
+.box b{display:block;color:#fff;font-size:13px;margin-bottom:2px}
+.box span{color:var(--muted);font-size:11.7px;line-height:1.45;display:block}
+.box.hi{border-color:var(--accent);background:linear-gradient(160deg,rgba(76,194,255,.12),var(--panel))}
+.box.hi-2{border-color:var(--purple);background:linear-gradient(160deg,rgba(187,154,247,.12),var(--panel))}
+.box.hi-3{border-color:var(--green);background:linear-gradient(160deg,rgba(110,231,160,.1),var(--panel))}
+.flow{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:16px 0;font-family:var(--mono);font-size:12.2px}
+.flow .step{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 10px;color:var(--fg-2)}
+.flow .step.a{border-color:var(--accent);color:#dff1ff}
+.flow .arw{color:var(--muted)}
+
+.badge{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:20px;border:1px solid var(--line-2);background:var(--panel-2);color:var(--muted);margin-right:5px;white-space:nowrap}
+.badge.g{border-color:rgba(110,231,160,.4);color:var(--green)}
+.badge.a{border-color:rgba(245,182,87,.4);color:var(--amber)}
+.badge.b{border-color:rgba(76,194,255,.4);color:var(--accent)}
+.badge.p{border-color:rgba(187,154,247,.45);color:var(--purple)}
+.badge.r{border-color:rgba(255,122,122,.4);color:var(--red)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+.pro{color:var(--green)}.con{color:var(--red)}
+.small{font-size:12.9px;color:var(--muted)}
+footer.end{margin-top:70px;padding-top:26px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+
+@media print{
+  body{background:#fff;color:#111}
+  nav.toc,#progress,.copy{display:none}
+  main{max-width:100%;padding:0}
+  h1 .grad{color:#111;-webkit-text-fill-color:#111}
+  .card,.box,.tablewrap,.codewrap,.metagrid .m{border-color:#ccc;background:#fafafa}
+  pre{background:#f6f8fa;color:#111}
+  a{color:#0a58ca}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">Pi · <b>Deep&nbsp;Dive</b></div>
+  <div class="sub">earendil-works/pi 源码级调研<br>面向 Agent 开发工程师</div>
+  <a href="#tldr">TL;DR · 十条结论</a>
+  <div class="grp">
+  <a href="#s1">一、项目定位与全景</a>
+  <a class="lv2" href="#s1-2">1.2 包地图</a>
+  <a class="lv2" href="#s1-3">1.3 技术基线</a>
+  <a class="lv2" href="#s1-4">1.4 活跃度与演进</a>
+  </div>
+  <div class="grp">
+  <a href="#s2">二、整体架构</a>
+  <a class="lv2" href="#s2-1">2.1 分层视图</a>
+  <a class="lv2" href="#s2-2">2.2 状态权威归属</a>
+  <a class="lv2" href="#s2-3">2.3 一次请求的完整路径</a>
+  </div>
+  <div class="grp">
+  <a href="#s3">三、模型层 pi-ai</a>
+  <a class="lv2" href="#s3-1">3.1 数据模型</a>
+  <a class="lv2" href="#s3-2">3.2 流式事件协议</a>
+  <a class="lv2" href="#s3-3">3.3 Provider 体系</a>
+  <a class="lv2" href="#s3-4">3.4 鉴权与目录生成</a>
+  <a class="lv2" href="#s3-5">3.5 推理等级与成本核算</a>
+  </div>
+  <div class="grp">
+  <a href="#s4">四、Agent 循环 pi-agent-core</a>
+  <a class="lv2" href="#s4-1">4.1 消息双模型</a>
+  <a class="lv2" href="#s4-2">4.2 事件序列</a>
+  <a class="lv2" href="#s4-3">4.3 Turn 生命周期与钩子</a>
+  <a class="lv2" href="#s4-4">4.4 工具执行与终止语义</a>
+  <a class="lv2" href="#s4-5">4.5 队列、打断与低层 API</a>
+  </div>
+  <div class="grp">
+  <a href="#s5">五、工具系统</a>
+  <a class="lv2" href="#s5-1">5.1 内置工具与截断</a>
+  <a class="lv2" href="#s5-2">5.2 五级暴露模型</a>
+  <a class="lv2" href="#s5-3">5.3 嵌套调用与结构化输出</a>
+  <a class="lv2" href="#s5-4">5.4 权限与注解</a>
+  </div>
+  <div class="grp">
+  <a href="#s6">六、上下文工程</a>
+  <a class="lv2" href="#s6-1">6.1 分节式 System Prompt</a>
+  <a class="lv2" href="#s6-2">6.2 压缩（Compaction）</a>
+  <a class="lv2" href="#s6-3">6.3 分支摘要</a>
+  <a class="lv2" href="#s6-4">6.4 缓存与虚拟模型</a>
+  </div>
+  <div class="grp">
+  <a href="#s7">七、扩展与资源体系</a>
+  <a class="lv2" href="#s7-1">7.1 扩展 API 能力面</a>
+  <a class="lv2" href="#s7-2">7.2 事件模型与并发契约</a>
+  <a class="lv2" href="#s7-3">7.3 状态与持久化选择</a>
+  <a class="lv2" href="#s7-4">7.4 Skills / 模板 / 主题 / 包</a>
+  </div>
+  <div class="grp">
+  <a href="#s8">八、Codemode 与 MCP</a>
+  <a class="lv2" href="#s8-1">8.1 Codemode 沙箱</a>
+  <a class="lv2" href="#s8-2">8.2 MCP 集成</a>
+  </div>
+  <div class="grp">
+  <a href="#s9">九、会话、持久化与远程</a>
+  <a class="lv2" href="#s9-1">9.1 JSONL 会话树</a>
+  <a class="lv2" href="#s9-2">9.2 Durable 崩溃安全 Harness</a>
+  <a class="lv2" href="#s9-3">9.3 远程执行与协议栈</a>
+  </div>
+  <div class="grp">
+  <a href="#s10">十、接入方式总览</a>
+  <a href="#s11">十一、工程实践借鉴</a>
+  <a href="#s12">十二、批判性评估</a>
+  <a href="#s13">十三、二次开发实战指南</a>
+  <a href="#appendix">附录 A/B/C</a>
+  </div>
+</nav>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow"><span class="dot"></span>技术调研报告 · 源码级 · 2026-10</div>
+  <h1>Pi Agent 框架 <span class="grad">深度调研</span></h1>
+  <p class="lede">
+    对 <code>github.com/earendil-works/pi</code> 的一次系统解剖：从统一模型层 <b>pi-ai</b>、Agent 循环 <b>pi-agent-core</b>，
+    到应用层 <b>pi-coding-agent</b> 的工具/扩展/会话体系，再到 <b>codemode</b>、<b>MCP</b> 与持久化/远程执行栈。
+    全文结论均来自仓库源码、官方文档与完整 git 历史的交叉核对，面向需要做技术选型或二次开发的 Agent 工程师。
+  </p>
+  <div class="metagrid">
+    <div class="m"><div class="k">调研对象</div><div class="v">earendil-works/pi</div></div>
+    <div class="m"><div class="k">main HEAD</div><div class="v">ea448f4 <small>2026-10-10</small></div></div>
+    <div class="m"><div class="k">最新发布</div><div class="v">v1.1.0 <small>2026-10-07</small></div></div>
+    <div class="m"><div class="k">许可</div><div class="v">MIT</div></div>
+    <div class="m"><div class="k">运行时要求</div><div class="v">Node ≥ 22.19</div></div>
+    <div class="m"><div class="k">仓库规模</div><div class="v">742 源文件<br><small>180,965 行 TS</small></div></div>
+    <div class="m"><div class="k">测试规模</div><div class="v">736 文件<br><small>191,542 行</small></div></div>
+    <div class="m"><div class="k">提交 / 作者</div><div class="v">6,839 / 315</div></div>
+  </div>
+</header>
+
+<!-- ==================== TL;DR ==================== -->
+<h2 id="tldr"><span class="num">00</span>TL;DR · 十条结论</h2>
+<p class="small">如果你只有 3 分钟，读这一段。每条都可在后文找到源码依据。</p>
+
+<div class="cards">
+  <div class="card"><div class="n">01</div><h5>它是「harness」，不是「框架全家桶」</h5><p>自述为 <em>minimal, extensible agent harness that you can make your own</em>。刻意不做 sub-agents 与 plan mode，把这类能力留给扩展生态。</p></div>
+  <div class="card"><div class="n">02</div><h5>四层可独立取用</h5><p><code>pi-ai</code>（模型）→ <code>pi-agent-core</code>（循环）→ <code>pi-coding-agent</code>（应用）→ <code>durable/server/protocol</code>（分布式）。下层不强依赖上层，SDK 可按需取用。</p></div>
+  <div class="card"><div class="n">03</div><h5>1.8 万行内核 vs 8.6 万行应用</h5><p>真正的 Agent 循环只有 <b>949 行</b>（<code>agent-loop.ts</code>），模型层 2.7 万行。复杂度集中在应用层的工具/会话/扩展/UI 装配。</p></div>
+  <div class="card"><div class="n">04</div><h5>Transcript 是唯一权威</h5><p>会话记录决定 system prompt、工具声明与模型上下文；<code>agent.state.messages = [...]</code> 不会替换持久化上下文。这是避免「两份上下文」bug 的关键设计。</p></div>
+  <div class="card"><div class="n">05</div><h5>工具暴露分级（5 档）</h5><p><code>direct / model-only / codemode / deferred / hidden</code>。「模型看得到的工具」≠「能调用的工具」，用于 token 经济与编排。</p></div>
+  <div class="card"><div class="n">06</div><h5>Codemode 是它的差异化武器</h5><p>模型写 JS 在 QuickJS(WASM) 沙箱跑，中间工具结果<b>不进上下文</b>，只回脚本输出。且它只是普通扩展，无特权 API。</p></div>
+  <div class="card"><div class="n">07</div><h5>会话是一棵可分支的树</h5><p>JSONL + <code>id/parentId</code>，支持 fork/clone/import。压缩（compaction）与分支摘要都是<b>往树里追加条目</b>，原历史永不删除。</p></div>
+  <div class="card"><div class="n">08</div><h5>没有内置沙箱</h5><p>安全模型是<b>显式信任 + OS 权限 + 容器化</b>。扩展与 Pi 同进程同权限；官方文档明确承认这一点，并把隔离责任交给部署方。</p></div>
+  <div class="card"><div class="n">09</div><h5>仓库本身是「Agent 优先」的</h5><p><code>AGENTS.md</code> 规定：禁止 <code>git add -A</code>/<code>reset --hard</code>/<code>stash</code>，因为<b>多个 Pi 会话可能并行修改同一工作区</b>。这是为 agent 协作而写的工程规范。</p></div>
+  <div class="card"><div class="n">10</div><h5>迭代极快，但核心作者集中</h5><p>14 个月 6,839 commits、302 个 tag；近 30 天 498 commits。同时 57% 提交来自单一作者（Mario Zechner），bus factor 值得关注。</p></div>
+</div>
+
+<div class="insight">
+  <span class="t">给你的一句话结论</span>
+  如果你要做的是<b>「可嵌入、可扩展、可远程、成本可控」的编码/终端 Agent</b>，Pi 的分层、工具暴露模型与 codemode 设计值得直接借鉴甚至复用下层包；
+  如果你要的是<b>开箱即用的多 Agent 编排平台</b>，Pi 不是它——它把编排、子 Agent、沙箱都推给了扩展与部署层。
+</div>
+
+<!-- ==================== 1 ==================== -->
+<h2 id="s1"><span class="num">01</span>项目定位与全景</h2>
+
+<h3 id="s1-1">1.1 一句话定位</h3>
+<p>仓库根 README 与 <code>packages/coding-agent/README.md</code> 自述：</p>
+<div class="quote"><span class="t">原文</span>Pi is a minimal, extensible agent harness that you can make your own. Adapt Pi to your workflows, not the other way around.</div>
+<p>值得注意的「减法」设计：官方 README 明确写出 <b>“ships with powerful defaults but skips features like sub-agents and plan mode”</b>。也就是说：</p>
+<ul>
+  <li>不做 sub-agent / plan mode —— 留给扩展或 Pi packages；</li>
+  <li>不做内置沙箱 —— 交给容器/VM/专用账户（见 <a href="#s12">第十二章</a>）；</li>
+  <li>内核保持极简，能力通过 <b>extensions / skills / prompt templates / themes / packages</b> 组合进来。</li>
+</ul>
+<p>分发形态有四类：交互式 TUI、print/JSON 批处理、RPC（跨语言）、TypeScript SDK（进程内嵌入）。四者共用同一套 agent 与 session 机制。</p>
+
+<h3 id="s1-2">1.2 包地图（14 个 workspace 包）</h3>
+<p>npm scope 为 <code>@earendil-works/*</code>，全部同版本发布（当前 <code>1.1.0</code>）。规模数据来自 <code>packages/*/src/**/*.ts</code> 统计：</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>包</th><th>角色</th><th>src 文件</th><th>src 行数</th><th>测试文件</th></tr></thead>
+<tbody>
+<tr><td><code>pi-ai</code></td><td>统一 LLM API：Provider 集合、模型目录、鉴权、多模态、用量与成本</td><td class="num">199</td><td class="num">27,242</td><td class="num">174</td></tr>
+<tr><td><code>pi-agent-core</code></td><td>Agent 循环、状态机、事件流、工具执行、队列</td><td class="num">6</td><td class="num">2,519</td><td class="num">7</td></tr>
+<tr><td><code>pi-coding-agent</code></td><td>应用层：内置工具、会话树、压缩、扩展运行时、四种模式、UI 装配</td><td class="num">305</td><td class="num">86,152</td><td class="num">332</td></tr>
+<tr><td><code>pi-tui</code></td><td>终端 UI 框架：差分渲染、CSI 2026 同步输出、内联图片</td><td class="num">46</td><td class="num">19,505</td><td class="num">51</td></tr>
+<tr><td><code>pi-durable</code></td><td>崩溃安全的持久化 harness（对话/任务/文档）</td><td class="num">73</td><td class="num">22,473</td><td class="num">104</td></tr>
+<tr><td><code>pi-codemode</code></td><td>QuickJS(WASM) 沙箱执行模型写的 JavaScript</td><td class="num">17</td><td class="num">2,597</td><td class="num">5</td></tr>
+<tr><td><code>pi-mcp</code></td><td>自研 MCP 客户端（不依赖官方 SDK）</td><td class="num">18</td><td class="num">3,244</td><td class="num">6</td></tr>
+<tr><td><code>pi-env</code></td><td>远程执行环境：Rust daemon + SSH 部署</td><td class="num">6</td><td class="num">2,073</td><td class="num">6</td></tr>
+<tr><td><code>pi-protocol</code></td><td>CBOR 路由信封 + 流分帧（experimental, v8）</td><td class="num">8</td><td class="num">869</td><td class="num">3</td></tr>
+<tr><td><code>pi-client</code></td><td>传输无关客户端</td><td class="num">8</td><td class="num">1,135</td><td class="num">4</td></tr>
+<tr><td><code>pi-server</code></td><td>本地 server，把连接路由到 durable session</td><td class="num">16</td><td class="num">1,958</td><td class="num">6</td></tr>
+<tr><td><code>chord</code></td><td>应用组合运行时：facets / services / 复制状态 / delta。<b>非 Pi 包</b>，零 Pi 依赖</td><td class="num">29</td><td class="num">8,817</td><td class="num">30</td></tr>
+<tr><td><code>pi-telemetry</code></td><td>厂商中立的遥测契约（显式 context，无全局 span 状态）</td><td class="num">6</td><td class="num">935</td><td class="num">2</td></tr>
+<tr><td><code>pi-evals</code></td><td>评测套件</td><td class="num">5</td><td class="num">1,446</td><td class="num">6</td></tr>
+<tr><td colspan="2"><b>合计</b></td><td class="num"><b>742</b></td><td class="num"><b>180,965</b></td><td class="num"><b>736</b></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note">
+  <span class="t">读法建议</span>
+  把 14 个包分成三圈看更清楚：<b>内核圈</b>（ai + agent-core，约 3 万行，稳定）、<b>应用圈</b>（coding-agent + tui，约 10.6 万行，迭代主力）、<b>前沿圈</b>（durable / server / protocol / client / env，约 3.5 万行，普遍标注 experimental）。选型时前两圈可以直接用，第三圈需要接受 API 变动风险。
+</div>
+
+<h3 id="s1-3">1.3 技术基线</h3>
+<div class="two">
+  <div>
+    <h4>语言与运行时</h4>
+    <ul>
+      <li>TypeScript，且只在 <b>Node strip-only 模式</b>下允许的「可擦除语法」（禁 enum / namespace / 参数属性 / <code>import =</code>）</li>
+      <li>Node <b>≥ 22.19</b>（CI 用 Node 22，<code>engines</code> 已声明）</li>
+      <li>原生模块：<code>@silvia-odwyer/photon-node</code>（图像处理）、<code>quickjs-wasi</code>（codemode 沙箱）</li>
+      <li>Rust：<code>pi-env</code> 的远端 daemon 用 Cargo 构建</li>
+      <li>可选 Nix flake（<code>nix profile add github:earendil-works/pi/stable</code>）</li>
+    </ul>
+  </div>
+  <div>
+    <h4>工具链</h4>
+    <ul>
+      <li>npm workspaces（14 包单仓），依赖<b>精确锁定</b>；安装一律 <code>--ignore-scripts</code></li>
+      <li>Biome 2.3.5 做 lint/format、tsc 7.0.2 做类型检查、vitest 做测试、esbuild 打包</li>
+      <li>husky 预提交钩子；lockfile 提交需显式环境变量放行</li>
+      <li>自研门禁脚本：<code>check:pinned-deps</code>、<code>check:runtime-deps</code>、<code>check:ts-imports</code>、<code>check:entry-graphs</code>、<code>check:browser-smoke</code></li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="s1-4">1.4 活跃度与演进</h3>
+<p>基于完整 git 历史（<code>git fetch --unshallow</code>）统计：</p>
+<div class="tl-grid">
+  <div class="s"><span class="big">6,839</span><span class="lbl">累计提交</span></div>
+  <div class="s"><span class="big">315</span><span class="lbl">贡献者</span></div>
+  <div class="s"><span class="big">302</span><span class="lbl">版本 tag</span></div>
+  <div class="s"><span class="big">14<span class="small"> 个月</span></span><span class="lbl">2025-08 → 2026-10</span></div>
+  <div class="s"><span class="big">498</span><span class="lbl">近 30 天提交</span></div>
+  <div class="s"><span class="big">~16<span class="small">/天</span></span><span class="lbl">近月均值</span></div>
+</div>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>里程碑</th><th>日期</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>首次提交</td><td>2025-08-09</td><td>“Initial monorepo setup with npm workspaces and dual TypeScript configuration”</td></tr>
+<tr><td>峰值月</td><td>2026-01</td><td>1,224 commits（单月）</td></tr>
+<tr><td><code>v0.99.0</code></td><td>2026-09-29</td><td>进入 1.0 前夜</td></tr>
+<tr><td><code>v1.0.0</code></td><td>2026-10-01</td><td>正式 1.0</td></tr>
+<tr><td><code>v1.1.0</code></td><td>2026-10-07</td><td>本次调研基线版本</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>主要贡献者（全历史提交数）：Mario Zechner <b>3,876</b>、Armin Ronacher <b>866</b>、David Brailovsky 304、Christian Klotz 215、Cristina Poncela Cubeiro 199、github-actions[bot] 193。</p>
+
+<div class="warn">
+  <span class="t">选型提醒</span>
+  提交类型分布为 fix 218 / feat 151 / docs 73（近 30 天），说明项目仍处于<b>高速塑形期</b>：功能面变化快、文档同步勤。若用于生产，请锁定 tag 并按 release notes 评估破坏性变更；实验性包（durable/server/protocol/client/env/evals）已在 README 中声明「API 可能随时变更，无兼容保证」。
+</div>
+
+<!-- ==================== 2 ==================== -->
+<h2 id="s2"><span class="num">02</span>整体架构</h2>
+
+<h3 id="s2-1">2.1 分层视图</h3>
+<p>依赖方向自上而下，下层不认识上层（<code>chord</code> 是唯一例外：它反过来不依赖任何 Pi 包）。</p>
+
+<div class="arch">
+  <div class="layer">
+    <div class="tag"><b>L4 应用/接入</b>应用层</div>
+    <div class="boxes">
+      <div class="box hi"><b>pi-coding-agent</b><span>TUI / print / JSON / RPC 四种模式 + 内置工具与会话</span></div>
+      <div class="box hi"><b>pi-durable</b><span>可嵌入的崩溃安全 harness（Chord 文档状态 + 任务图）</span></div>
+      <div class="box hi"><b>pi-server · pi-client</b><span>远程会话路由（多方挂载 presentations）</span></div>
+    </div>
+  </div>
+  <div class="layer">
+    <div class="tag"><b>L3 会话/运行时</b>装配层</div>
+    <div class="boxes">
+      <div class="box"><b>SessionManager</b><span>JSONL 树、活动分支、上下文重建</span></div>
+      <div class="box"><b>Compaction</b><span>摘要切点、分支摘要、溢出恢复</span></div>
+      <div class="box"><b>Extension Runtime</b><span>工具/命令/事件/渲染器/Provider 注册</span></div>
+      <div class="box"><b>ModelRuntime / Settings</b><span>凭据、作用域模型、设置合并</span></div>
+    </div>
+  </div>
+  <div class="layer">
+    <div class="tag"><b>L2 Agent 循环</b>决策层</div>
+    <div class="boxes">
+      <div class="box hi-2"><b>pi-agent-core</b><span>Agent / agentLoop：turn、工具批、steering、事件流</span></div>
+      <div class="box hi-2"><b>AgentMessage ⇄ LLM Message</b><span>convertToLlm / transformContext 边界转换</span></div>
+    </div>
+  </div>
+  <div class="layer">
+    <div class="tag"><b>L1 模型抽象</b>能力层</div>
+    <div class="boxes">
+      <div class="box hi-3"><b>pi-ai</b><span>Models 集合、42 个内置 Provider 工厂、流式事件、成本核算</span></div>
+      <div class="box hi-3"><b>Catalog / Auth</b><span>models.dev 生成目录、env/凭证/OAuth 解析</span></div>
+    </div>
+  </div>
+  <div class="layer">
+    <div class="tag"><b>L0 支撑</b>底座</div>
+    <div class="boxes">
+      <div class="box"><b>pi-tui</b><span>差分渲染终端框架</span></div>
+      <div class="box"><b>pi-codemode</b><span>QuickJS 沙箱</span></div>
+      <div class="box"><b>pi-mcp</b><span>MCP 客户端</span></div>
+      <div class="box"><b>pi-env</b><span>远程执行</span></div>
+      <div class="box"><b>pi-protocol</b><span>CBOR 分帧</span></div>
+      <div class="box"><b>pi-telemetry</b><span>遥测契约</span></div>
+      <div class="box"><b>chord</b><span>服务/复制状态运行时</span></div>
+    </div>
+  </div>
+</div>
+
+<h3 id="s2-2">2.2 状态权威归属（理解 Pi 的关键）</h3>
+<p>Pi 的文档反复强调一件事：<b>每个状态只有一个权威来源</b>。这一点在 <code>docs/sdk.md</code>、<code>packages/agent/README.md</code> 中都有直白警告。</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>状态</th><th>权威来源</th><th>工程含义</th></tr></thead>
+<tbody>
+<tr><td>模型上下文（Messages）</td><td>SessionManager 的<b>活动分支</b> + compaction 投影</td><td>直接赋值 <code>session.agent.state.messages</code> <b>不会</b>改变持久化上下文（SDK 陷阱）</td></tr>
+<tr><td>System Prompt &amp; 工具声明</td><td><b>Transcript</b> 中的 system 消息（首条为 prompt，后续为 patch）</td><td><code>agent.state.systemPrompt</code> 是只读的「重放」视图</td></tr>
+<tr><td>可执行工具集（loadout）</td><td><code>agent.state.tools</code></td><td>每次请求前与 transcript 声明做 diff，不一致就注入一条 system 变更说明</td></tr>
+<tr><td>会话历史</td><td>JSONL 文件的 <code>id/parentId</code> 树</td><td>分支不会被删除，只移动 leaf</td></tr>
+<tr><td>项目资源（扩展/技能/设置）</td><td>信任决策后的 ResourceLoader</td><td>拒绝信任即跳过受保护资源（但 <code>sessionDir</code> 查询无法撤销）</td></tr>
+<tr><td>凭据</td><td><code>~/.pi/agent/</code> 凭据存储 + Provider 解析链</td><td><code>getApiKey</code> 支持动态刷新（OAuth 过期令牌）</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="s2-3">2.3 一次请求的完整路径</h3>
+<div class="flow">
+  <span class="step">用户输入</span><span class="arw">→</span>
+  <span class="step">prompt template 展开 / @file 注入</span><span class="arw">→</span>
+  <span class="step a">消息写入树（父指针）</span><span class="arw">→</span>
+  <span class="step">组装：system sections + 分支消息 + 工具声明</span><span class="arw">→</span>
+  <span class="step a">prepareRequest（可替换上下文）</span><span class="arw">→</span>
+  <span class="step">provider 流式响应</span><span class="arw">→</span>
+  <span class="step a">assistant 消息落盘</span><span class="arw">→</span>
+  <span class="step">工具 preflight（<code>tool_call</code> 可否决）</span><span class="arw">→</span>
+  <span class="step">并行/串行执行 + <code>tool_result</code> 可改写</span><span class="arw">→</span>
+  <span class="step a">toolResult 消息落盘</span><span class="arw">→</span>
+  <span class="step">finishTurn 决策</span><span class="arw">→</span>
+  <span class="step">下一轮 / agent_end → agent_before_settle → agent_settled</span>
+</div>
+
+<div class="note">
+  <span class="t">两个「边界事件」概念</span>
+  <code>agent_before_settle</code> 是<b>最后一个可动作的边界</b>：它能追加条目并请求一次续跑；<code>agent_settled</code> 则是<b>只读的终态通知</b>，用于让外部集成确认 Pi 不会再自动继续。缺少这两个概念时，集成方很容易在「自动重试/压缩/队列」结束前误判会话已空闲。
+</div>
+
+<!-- ==================== 3 ==================== -->
+<h2 id="s3"><span class="num">03</span>模型层 <code>pi-ai</code></h2>
+<p class="small">27,242 行 / 199 个源文件 / 174 个测试文件。它是整个栈里最「厚」的基础设施，也是复用价值最高的包。</p>
+
+<h3 id="s3-1">3.1 数据模型</h3>
+<p>核心类型集中在 <code>packages/ai/src/types.ts</code>（893 行）。消息与内容块是<b>所有 Provider 的公共语言</b>：</p>
+
+<div class="codewrap">
+  <div class="codehead"><span>消息与内容块（简化）</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">type</span> <span class="c-ty">Message</span> = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage;
+
+<span class="c-kw">interface</span> <span class="c-ty">TextContent</span>     { type: <span class="c-str">"text"</span>; text: <span class="c-kw">string</span>; textSignature?: <span class="c-kw">string</span>; }
+<span class="c-kw">interface</span> <span class="c-ty">ThinkingContent</span> { type: <span class="c-str">"thinking"</span>; thinking: <span class="c-kw">string</span>; thinkingSignature?: <span class="c-kw">string</span>; redacted?: <span class="c-kw">boolean</span>; }
+<span class="c-kw">interface</span> <span class="c-ty">ImageContent</span>    { type: <span class="c-str">"image"</span>; data: <span class="c-kw">string</span>; mimeType: <span class="c-kw">string</span>; }
+<span class="c-kw">interface</span> <span class="c-ty">ToolCall</span>        { type: <span class="c-str">"toolCall"</span>; id: <span class="c-kw">string</span>; name: <span class="c-kw">string</span>; arguments: JsonObject;
+                              thoughtSignature?: <span class="c-kw">string</span>; namespace?: <span class="c-kw">string</span>; }
+
+<span class="c-kw">interface</span> <span class="c-ty">Usage</span> {                       <span class="c-cm">// 成本与缓存感知是一等公民</span>
+  input: <span class="c-kw">number</span>; output: <span class="c-kw">number</span>;
+  cacheRead: <span class="c-kw">number</span>; cacheWrite: <span class="c-kw">number</span>; cacheWrite1h?: <span class="c-kw">number</span>;
+  reasoning?: <span class="c-kw">number</span>;                 <span class="c-cm">// output 的子集，仅部分 Provider 报告</span>
+  totalTokens: <span class="c-kw">number</span>;
+  cost: { input; output; cacheRead; cacheWrite; total };
+}
+
+<span class="c-kw">type</span> <span class="c-ty">StopReason</span> = <span class="c-str">"pending" | "stop" | "length" | "toolUse" | "error" | "aborted" | "deferred"</span>;</pre>
+</div>
+
+<p>设计细节值得借鉴：</p>
+<ul>
+  <li><code>thinkingSignature</code> / <code>thoughtSignature</code> / <code>textSignature</code> 保存 <b>Provider 私有的不透明回放数据</b>（如 Anthropic 加密推理块、Google thought context），使多轮推理连续性不被跨 Provider 抽象破坏；被安全过滤的推理内容以 <code>redacted: true</code> + 密文形式保留。</li>
+  <li><code>stopReason</code> 里的 <code>"deferred"</code> 表示<b>延迟响应</b>（批处理/异步模式），配套 <code>DeferredHandle</code>（含 <code>expiresAt</code>、<code>pollAfterMs</code>）——这是很多统一 LLM 层没覆盖的场景。</li>
+  <li><code>ToolResultMessage</code> 用条件类型强制 <code>details</code> 必须是 JSON 兼容结构，从类型层面保证可持久化。</li>
+</ul>
+
+<h3 id="s3-2">3.2 流式事件协议</h3>
+<p>消费方式是一个 <code>EventStream</code>（可 <code>for await</code>），末尾用 <code>await s.result()</code> 取最终消息：</p>
+
+<div class="codewrap">
+  <div class="codehead"><span>流式事件类型</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-cm">// 事件：start → (text|thinking|toolcall)_* → done | error</span>
+<span class="c-kw">for</span> <span class="c-kw">await</span> (<span class="c-kw">const</span> event <span class="c-kw">of</span> models.stream(model, context)) {
+  <span class="c-kw">switch</span> (event.type) {
+    <span class="c-kw">case</span> <span class="c-str">"text_delta"</span>:     process.stdout.write(event.delta); <span class="c-kw">break</span>;
+    <span class="c-kw">case</span> <span class="c-str">"thinking_delta"</span>: <span class="c-cm">/* 推理内容流式输出 */</span>      <span class="c-kw">break</span>;
+    <span class="c-kw">case</span> <span class="c-str">"toolcall_delta"</span>: <span class="c-cm">/* 工具参数是「部分 JSON」，边流边解析 */</span> <span class="c-kw">break</span>;
+    <span class="c-kw">case</span> <span class="c-str">"toolcall_end"</span>:   <span class="c-cm">/* 参数已完整、可校验 */</span>          <span class="c-kw">break</span>;
+    <span class="c-kw">case</span> <span class="c-str">"done"</span>:           <span class="c-cm">/* reason: stop | length | toolUse ... */</span> <span class="c-kw">break</span>;
+    <span class="c-kw">case</span> <span class="c-str">"error"</span>:          <span class="c-cm">/* event.error.errorMessage */</span>       <span class="c-kw">break</span>;
+  }
+}
+<span class="c-kw">const</span> finalMessage = <span class="c-kw">await</span> s.result();
+context.messages.push(finalMessage);</pre>
+</div>
+<p>两个易被忽略的能力：<b>流式部分 JSON 工具参数</b>（可在参数未完成时先做 UI 反馈）与 <b>参数校验入口</b>（<code>validateToolArguments</code>，与 TypeBox schema 联动，被 agent 循环复用做 preflight）。此外包内提供 <code>faux</code> Provider（24KB 代码）用于测试，无需真实 API。</p>
+
+<h3 id="s3-3">3.3 Provider 体系</h3>
+<div class="tl-grid">
+  <div class="s"><span class="big">42</span><span class="lbl">内置 Provider 工厂<br><span class="small">builtinProviders()</span></span></div>
+  <div class="s"><span class="big">94</span><span class="lbl">providers/ 下源文件</span></div>
+  <div class="s"><span class="big">3</span><span class="lbl">模型类别<br><span class="small">chat / image / classifier</span></span></div>
+  <div class="s"><span class="big">1</span><span class="lbl">通用兼容入口<br><span class="small">任意 OpenAI 兼容端点</span></span></div>
+</div>
+
+<p>覆盖范围包含 OpenAI / Anthropic / Google / Vertex AI / Bedrock / Azure、主流推理平台（Groq、Cerebras、Together、Fireworks、DeepSeek、Mistral、xAI、NVIDIA NIM）、聚合网关（OpenRouter、Vercel AI Gateway、Cloudflare AI Gateway / Workers AI）、以及订阅制入口（ChatGPT Plus/Pro 的 Codex、GitHub Copilot，均走 OAuth），还有中国区变体（Moonshot/Kimi、MiniMax、智谱、Qwen、小米 MiMo 的 cn/ams/sgp 分区）。</p>
+
+<div class="insight">
+  <span class="t">关键设计：catalog 只收录支持工具调用的模型</span>
+  pi-ai README 原文：chat catalog <b>only includes models that support tool calling (function calling), as this is essential for agentic workflows</b>。图像与分类器模型走独立 catalog 与独立 API。这个取舍避免了「选中一个不能调工具的模型导致 agent 静默失效」这一常见坑。
+</div>
+
+<p>兼容层（<code>compat-schema.ts</code>，约 28KB）用于描述同类 API 的差异：OpenAI Completions / Responses 兼容参数、Anthropic Messages 兼容参数，并可声明 <code>inputLimits</code>、<code>promptCache</code> 生命周期、按 thinking level 的采样参数（<code>samplingParamsByThinkingLevel</code>）。这也是接入内网 vLLM/Ollama/LM Studio 的官方路径（另有专门的 <code>llama-cpp.md</code> 文档）。</p>
+
+<h3 id="s3-4">3.4 鉴权与模型目录生成</h3>
+<div class="two">
+  <div>
+    <h4>鉴权解析链</h4>
+    <ol>
+      <li>Provider 自带的工厂读取环境变量（如 <code>OPENAI_API_KEY</code>、<code>ANTHROPIC_API_KEY</code>）</li>
+      <li>Pi 的凭据存储（<code>/login</code>、<code>pi auth</code>、SDK 的 <code>readStoredCredential</code>）</li>
+      <li>OAuth 流程（订阅制 Provider、Vertex、Copilot、远程机器上的浏览器登录）</li>
+      <li>运行时覆盖：<code>--api-key</code>（不落盘）、<code>getApiKey(provider)</code> 动态刷新</li>
+      <li>可注入 <code>fetch</code> 与请求头变换钩子（<code>before_provider_headers</code> / <code>before_provider_request</code> 扩展事件）</li>
+    </ol>
+  </div>
+  <div>
+    <h4>模型目录（models.generated.ts）</h4>
+    <ul>
+      <li>由 <code>scripts/generate-models.ts</code> 从 <b>models.dev</b>、OpenRouter 目录、AI Gateway 定价等外部源聚合生成</li>
+      <li>原始数据目录 <code>src/providers/data/</code> 被 <b>.gitignore</b> 排除 → 构建时才 hydrate（<code>build:offline</code> 保留离线路径）</li>
+      <li><code>.manifest.json</code> 记录 <code>generatedAt</code>，可校验一致性</li>
+      <li>仓库规则：<b>禁止手改 <code>models.generated.ts</code></b>，必须改生成器再重生成</li>
+      <li>另有独立 workflow <code>publish-model-catalog.yml</code> 与 <code>update:model-catalog-pin</code> 做目录发布与固定</li>
+    </ul>
+  </div>
+</div>
+
+<div class="warn">
+  <span class="t">内网/离线环境注意</span>
+  模型元数据依赖外部数据源。内网部署要么走 <code>build:offline</code>（把 data 目录随包分发），要么在 <code>modelOverrides</code> 里手工声明目标模型的 <code>inputLimits</code> 与 <code>promptCache</code>，否则上下文窗口与缓存策略会失准。
+</div>
+
+<h3 id="s3-5">3.5 推理等级、采样与成本</h3>
+<ul>
+  <li><b>7 档统一推理等级</b>：<code>off | minimal | low | medium | high | xhigh | max</code>（<code>THINKING_LEVELS</code> / <code>MODEL_THINKING_LEVELS</code>）。跨 Provider 语义统一，并<b>按模型能力自动 clamp</b>；token 型 Provider 可用 <code>thinkingBudgets</code> 自定义每档预算（默认 minimal 128 / low 512 / medium 1024 / high 2048）。</li>
+  <li><b>难度→参数映射</b>：<code>SamplingParamsByThinkingLevel</code> 允许为每个等级声明不同的温度等采样参数。</li>
+  <li><b>成本核算</b>：<code>Usage.cost</code> 覆盖 input/output/cacheRead/cacheWrite 四项，Anthropic 的 1h 缓存写入单独可辨（<code>cacheWrite1h</code>）。会话级累计由 coding-agent 的 <code>usage-totals.ts</code> 汇总。</li>
+  <li><b>跨 Provider 交接</b>：<code>Context</code> 可序列化，因此可以在会话中途换模型甚至换厂商，历史消息保持同一形状（Pi 文档称之为 cross-provider handoff）。</li>
+</ul>
+
+<!-- ==================== 4 ==================== -->
+<h2 id="s4"><span class="num">04</span>Agent 循环 <code>pi-agent-core</code></h2>
+<p class="small">6 个源文件 / 2,519 行。这是全项目最值得精读的部分：<code>agent-loop.ts</code> 949 行 + <code>agent.ts</code> 613 行 + <code>types.ts</code> 539 行 + <code>proxy.ts</code> 393 行。</p>
+
+<h3 id="s4-1">4.1 消息双模型：AgentMessage ⇄ LLM Message</h3>
+<p>循环内部始终使用 <code>AgentMessage</code>，只在<b>真正发起 LLM 调用的边界</b>才转换成 <code>Message[]</code>。转换链有两级：</p>
+
+<div class="codewrap">
+  <div class="codehead"><span>上下文转换管线</span><span class="lang">text</span><button class="copy">复制</button></div>
+<pre>AgentMessage[] ──transformContext()──▶ AgentMessage[] ──convertToLlm()──▶ Message[] ──▶ LLM
+                  (可选：剪枝、压缩、          (必需：过滤 UI-only 消息、
+                   注入外部上下文)             自定义角色转成 LLM 格式)</pre>
+</div>
+
+<p><code>AgentMessage</code> 通过 TypeScript <b>declaration merging</b> 扩展：</p>
+<div class="codewrap">
+  <div class="codehead"><span>自定义消息角色</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">declare module</span> <span class="c-str">"@earendil-works/pi-agent-core"</span> {
+  <span class="c-kw">interface</span> <span class="c-ty">CustomAgentMessages</span> {
+    notification: { role: <span class="c-str">"notification"</span>; text: <span class="c-kw">string</span>; timestamp: <span class="c-kw">number</span> };
+  }
+}
+<span class="c-cm">// 在 convertToLlm 里把 notification 过滤掉（不进模型上下文，但留在会话树里给 UI 用）</span>
+convertToLlm: (messages) =&gt; messages.flatMap(m =&gt; m.role === <span class="c-str">"notification"</span> ? [] : [m])</pre>
+</div>
+<div class="note">
+  <span class="t">为什么这个边界重要</span>
+  它让「UI 状态 / 审计记录 / 工具中间产物」可以<b>和模型上下文共用一棵会话树</b>，而不污染 token 预算。压缩（compaction）与摘要逻辑也正是建立在「投影（projection）」这个概念上：树是完整事实，模型只看到投影。
+</div>
+
+<h3 id="s4-2">4.2 事件序列</h3>
+<p>8 种事件，顺序严格。带工具调用的典型时序（摘自官方 README）：</p>
+<div class="codewrap">
+  <div class="codehead"><span>prompt("Read config.json") 的事件流</span><span class="lang">text</span><button class="copy">复制</button></div>
+<pre>agent_start
+turn_start
+message_start/end   { userMessage }
+message_start       { assistantMessage with toolCall }
+message_update ...  { 流式分片 }
+message_end         { assistantMessage }
+tool_execution_start   { toolCallId, toolName, args }
+tool_execution_update  { partialResult }        <span class="c-cm">// 工具可流式上报</span>
+tool_execution_end     { toolCallId, result }
+message_start/end   { toolResultMessage }
+turn_end            { message, toolResults }
+─────────────────── 下一轮（若需要）───────────────────
+turn_start → ... → turn_end
+agent_end           { messages: [...] }
+agent_before_settle → agent_settled</pre>
+</div>
+<div class="tablewrap">
+<table>
+<thead><tr><th>事件</th><th>语义</th></tr></thead>
+<tbody>
+<tr><td><code>agent_start</code> / <code>agent_end</code></td><td>一次 run 的边界。<code>agent_end</code> 是最后一个事件，但 <b>await 的订阅者仍计入结算</b></td></tr>
+<tr><td><code>turn_start</code> / <code>turn_end</code></td><td>一轮 = 一次 LLM 调用 + 其工具执行</td></tr>
+<tr><td><code>message_start</code> / <code>message_update</code> / <code>message_end</code></td><td><code>message_update</code> <b>仅用于 assistant</b>，携带 <code>assistantMessageEvent</code> 分片</td></tr>
+<tr><td><code>tool_execution_start</code> / <code>_update</code> / <code>_end</code></td><td>工具三态；并行模式下 <code>end</code> 按<b>完成顺序</b>触发</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="s4-3">4.3 Turn 生命周期与三个钩子</h3>
+<div class="codewrap">
+  <div class="codehead"><span>每轮 Provider 请求的生命周期</span><span class="lang">text</span><button class="copy">复制</button></div>
+<pre>选定输入（tool results / steering / follow-up）
+  → prepareRequest      <span class="c-cm">// 每次请求前重建权威上下文（含第一次）</span>
+  → provider response
+  → tool results
+  → finishTurn          <span class="c-cm">// 决定 continue / end</span>
+  → turn_end
+  → 现有续跑调度 或 agent_end</pre>
+</div>
+<ul>
+  <li><code>prepareRequest</code>：在每次会话请求前安装「规范化持久化上下文」。典型用途是把 SessionManager 里加载的权威消息覆盖回请求上下文，避免扩展或 UI 造成的漂移。注意：它<b>不会</b>轮询队列。</li>
+  <li><code>finishTurn</code>：取代了旧的 <code>shouldStopAfterTurn</code>。返回 <code>{action:"end"}</code> 会在 <code>turn_end</code> 后立刻结束本轮，且<b>不再轮询队列</b>；返回 <code>{action:"continue"}</code> 保证再发一次请求（若无工具结果/队列已满足，则会发一次「纯上下文」请求）。</li>
+  <li><b>护栏</b>：<code>finishTurn</code> 在下一轮之后会再次执行，因此无条件返回 <code>continue</code> 会造成死循环；错误/中止响应是硬退出，其返回值被忽略——官方给出「先 guard <code>stopReason</code> 再判断」的迁移范式。</li>
+</ul>
+
+<div class="codewrap">
+  <div class="codehead"><span>Agent 构造与钩子（摘自 packages/agent/README.md）</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">const</span> agent = <span class="c-kw">new</span> <span class="c-ty">Agent</span>({
+  initialState: { systemPrompt, model, thinkingLevel: <span class="c-str">"medium"</span>, tools: [readFileTool] },
+  streamFn: models.streamSimple.bind(models),
+  sessionId: <span class="c-str">"session-123"</span>,          <span class="c-cm">// 供 Provider 侧缓存命中的会话标识</span>
+
+  <span class="c-cm">// 工具执行前的「预检」，可阻止调用</span>
+  beforeToolCall: <span class="c-kw">async</span> ({ toolCall }) =&gt;
+    toolCall.name === <span class="c-str">"bash"</span> ? { block: <span class="c-kw">true</span>, reason: <span class="c-str">"bash disabled"</span>, terminate: <span class="c-kw">true</span> } : <span class="c-kw">undefined</span>,
+
+  <span class="c-cm">// 工具结果的后处理：可加审计字段、可请求终止</span>
+  afterToolCall: <span class="c-kw">async</span> ({ toolCall, result, isError }) =&gt;
+    !isError ? { details: { ...result.details, audited: <span class="c-kw">true</span> } } : <span class="c-kw">undefined</span>,
+
+  prepareRequest: <span class="c-kw">async</span> ({ context }) =&gt; ({ context: { ...context, messages: <span class="c-kw">await</span> session.loadModelContext() } }),
+  finishTurn:     <span class="c-kw">async</span> ({ message }) =&gt; shouldEndRun(message) ? { action: <span class="c-str">"end"</span> } : <span class="c-kw">undefined</span>,
+  getApiKey: <span class="c-kw">async</span> (provider) =&gt; refreshToken(),   <span class="c-cm">// OAuth 过期令牌动态解析</span>
+  thinkingBudgets: { minimal: 128, low: 512, medium: 1024, high: 2048 },
+});</pre>
+</div>
+
+<h3 id="s4-4">4.4 工具执行、批处理与终止语义</h3>
+<div class="two">
+  <div>
+    <h4>并行 vs 串行</h4>
+    <ul>
+      <li>默认 <code>parallel</code>：<b>preflight 顺序执行</b>（参数校验、<code>beforeToolCall</code>），允许的工具<b>并发执行</b>，<code>tool_execution_end</code> 按完成顺序发出，但落盘的 toolResult 消息与 <code>turn_end.toolResults</code> <b>仍按 assistant 源码顺序</b></li>
+      <li><code>sequential</code>：逐条执行（历史行为）</li>
+      <li>粒度：全局 <code>toolExecution</code>，或单工具 <code>executionMode</code>。任一工具声明 sequential，<b>整批</b>转串行</li>
+    </ul>
+  </div>
+  <div>
+    <h4>终止（terminate）语义</h4>
+    <ul>
+      <li>三个来源可返回 <code>terminate: true</code>：工具 <code>execute()</code>、被阻止的 <code>beforeToolCall</code>、<code>afterToolCall</code> 覆盖</li>
+      <li>效果：跳过该批之后<b>自动的</b>后续 LLM 调用</li>
+      <li>约束：<b>只有当该批所有已定稿的 tool result 都为 terminate 时</b>才生效；混合批次照常继续</li>
+      <li>该提示是<b>运行时语义</b>，落盘的 toolResult 仍是标准 LLM 工具结果</li>
+    </ul>
+  </div>
+</div>
+<div class="note">
+  <span class="t">顺序保证</span>
+  使用 <code>Agent</code> 类时，assistant 的 <code>message_end</code> 处理被当作<b>屏障（barrier）</b>，因此 <code>beforeToolCall</code> 看到的 agent 状态里已经包含「发起该工具调用的那条 assistant 消息」。但如果你直接用低层 <code>agentLoop()</code>，事件流是纯观测性的——它保序但<b>不等</b>你的异步处理完成。
+</div>
+
+<h3 id="s4-5">4.5 队列、打断与低层 API</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>能力</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td><code>agent.steer(msg)</code></td><td>在当前 assistant 轮次的工具执行期间插入指令；本轮工具全部结束后注入，下一轮生效</td></tr>
+<tr><td><code>agent.followUp(msg)</code></td><td>仅在「无工具调用、无 steering」时才被检查并注入，触发额外一轮</td></tr>
+<tr><td>队列模式</td><td><code>one-at-a-time</code>（默认）或 <code>all</code>，分别对应 steering / follow-up 两套模式</td></tr>
+<tr><td><code>abort()</code></td><td>中止当前操作；队列中的消息<b>归还编辑器</b>（交互模式）</td></tr>
+<tr><td><code>waitForIdle()</code></td><td>等待空闲，包含已 await 的 <code>agent_end</code> 订阅者</td></tr>
+<tr><td>低层 API</td><td><code>agentLoop()</code> / <code>agentLoopContinue()</code> 返回 <code>EventStream</code>；注意 <code>continue()</code> 要求末尾消息经 <code>convertToLlm</code> 后是 user 或 toolResult，否则 Provider 会拒</td></tr>
+<tr><td>浏览器场景</td><td><code>streamProxy(model, context, { authToken, proxyUrl })</code> 经后端代理，避免在前端暴露密钥</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="codewrap">
+  <div class="codehead"><span>最小可运行 Agent（官方 Quick Start 摘要）</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">import</span> { Agent } <span class="c-kw">from</span> <span class="c-str">"@earendil-works/pi-agent-core"</span>;
+<span class="c-kw">import</span> { createModels } <span class="c-kw">from</span> <span class="c-str">"@earendil-works/pi-ai"</span>;
+<span class="c-kw">import</span> { anthropicProvider } <span class="c-kw">from</span> <span class="c-str">"@earendil-works/pi-ai/providers/anthropic"</span>;
+
+<span class="c-kw">const</span> models = createModels();
+models.setProvider(anthropicProvider());                    <span class="c-cm">// 只注册用到的 Provider，利于 tree-shaking</span>
+<span class="c-kw">const</span> model = models.getModel(<span class="c-str">"anthropic"</span>, <span class="c-str">"claude-sonnet-4-6"</span>)!;
+
+<span class="c-kw">const</span> agent = <span class="c-kw">new</span> <span class="c-ty">Agent</span>({
+  initialState: { systemPrompt: <span class="c-str">"You are a helpful assistant."</span>, model },
+  streamFn: models.streamSimple.bind(models),
+});
+
+agent.subscribe((event) =&gt; {
+  <span class="c-kw">if</span> (event.type === <span class="c-str">"message_update"</span> &amp;&amp; event.assistantMessageEvent.type === <span class="c-str">"text_delta"</span>)
+    process.stdout.write(event.assistantMessageEvent.delta);
+});
+
+<span class="c-kw">await</span> agent.prompt(<span class="c-str">"Hello!"</span>);</pre>
+</div>
+
+<div class="insight">
+  <span class="t">对工程师的启示</span>
+  Pi 的循环层把「工具调用批处理」当作一等公民：preflight / 并发 / 顺序语义 / 终止信号 / 队列 都有明确契约。
+  自研 agent 时最容易出问题的地方（并行工具的结果顺序漂移、工具连环调用无法收尾、打断后的消息丢失），这里都有对应的显式设计。
+</div>
+
+<!-- ==================== 5 ==================== -->
+<h2 id="s5"><span class="num">05</span>工具系统</h2>
+<p class="small">源码位置：<code>packages/coding-agent/src/core/tools/</code>（16 个文件，3,566 行）。这是「应用层如何把能力安全地交给模型」的完整答案。</p>
+
+<h3 id="s5-1">5.1 内置工具与截断策略</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>工具</th><th>作用</th><th>关键实现点</th></tr></thead>
+<tbody>
+<tr><td><code>read</code></td><td>读文件（含图片，支持 resize 与格式转换）</td><td>行/字节双截断；图片走 <code>photon</code> 处理</td></tr>
+<tr><td><code>write</code></td><td>写文件</td><td>经文件变更队列串行化</td></tr>
+<tr><td><code>edit</code></td><td>精确文本替换</td><td>生成 diff / unified patch（<code>edit-diff.ts</code> 556 行）</td></tr>
+<tr><td><code>grep</code></td><td>内容搜索</td><td>单行匹配最多 <b>500</b> 字符（<code>GREP_MAX_LINE_LENGTH</code>）</td></tr>
+<tr><td><code>find</code></td><td>文件名搜索</td><td>依赖 <code>fd</code>（CI 中安装）</td></tr>
+<tr><td><code>ls</code></td><td>列目录</td><td>结构化输出</td></tr>
+<tr><td><code>bash</code></td><td>Shell 执行</td><td>可注入 <code>BashSpawnHook</code> / 自定义 operations（沙箱、远端执行）</td></tr>
+<tr><td><code>powershell</code></td><td>Windows 原生 Shell</td><td>与 bash 并列的独立工具</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>默认 loadout 只有四个：<code>["read", "bash", "edit", "write"]</code>（见 <code>system-prompt.ts</code> 的 <code>normalizeBuildSystemPromptOptions</code> 默认值）。其余工具按需激活。</p>
+
+<div class="codewrap">
+  <div class="codehead"><span>截断常量（truncate.ts）</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">export const</span> DEFAULT_MAX_LINES  = 2000;
+<span class="c-kw">export const</span> DEFAULT_MAX_BYTES  = 50 * 1024;   <span class="c-cm">// 50KB</span>
+<span class="c-kw">export const</span> GREP_MAX_LINE_LENGTH = 500;
+
+<span class="c-cm">// 三种截断策略：保头 / 保尾 / 截单行</span>
+truncateHead(text, opts)  |  truncateTail(text, opts)  |  truncateLine(text, maxChars)</pre>
+</div>
+
+<div class="insight">
+  <span class="t">值得抄走的模式</span>
+  <b>1) 截断 + 明确指路</b>：结果被截断时告知模型完整输出在哪（浏览器端是临时文件路径；bash 则给 <code>full_output_path</code>），而不是静默丢数据。<br>
+  <b>2) 文件变更队列</b>：<code>withFileMutationQueue()</code> 把「读-改-写」整体串行化，这是多工具并行执行下的必要保险。<br>
+  <b>3) 工具用抛错表达失败</b>：<code>throw</code> 会被转成 <code>isError: true</code> 的工具结果；返回对象<b>不会</b>被标记为错误——这条约定能避免「模型把错误当成功继续推理」。
+</div>
+
+<h3 id="s5-2">5.2 五级暴露模型（Pi 最有辨识度的设计）</h3>
+<p>传统做法是把所有工具 schema 一股脑塞进 system prompt。Pi 把它拆成两个维度：<b>是否向模型声明（declared）</b>与<b>是否可被其它工具调用（callable）</b>。</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>exposure</th><th>向模型声明</th><th>可被 <code>ctx.executeTool()</code> 调用</th><th>codemode 会列出</th><th>典型用途</th></tr></thead>
+<tbody>
+<tr><td><code>direct</code>（默认）</td><td>✅ 激活时</td><td>✅ 激活时</td><td>—</td><td>常规工具</td></tr>
+<tr><td><code>model-only</code></td><td>✅ 激活时</td><td>❌ 永不</td><td>—</td><td>编排型工具、向用户提问的工具</td></tr>
+<tr><td><code>codemode</code></td><td>❌（除显式激活）</td><td>✅ 注册即可</td><td>✅</td><td>只希望被脚本调用的工具</td></tr>
+<tr><td><code>deferred</code></td><td>❌</td><td>✅</td><td>❌</td><td>数量巨大的工具集，交由 <code>tool_search</code> 按需激活</td></tr>
+<tr><td><code>hidden</code></td><td>❌</td><td>❌</td><td>❌</td><td>「撤回」工具（工具无法注销，只能隐藏）</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>配套机制：</p>
+<ul>
+  <li><b>激活集（loadout）</b>：<code>pi.getActiveTools()</code> / <code>pi.setActiveTools()</code>。注册 <code>direct</code> / <code>model-only</code> 工具会立即激活；其余暴露级别注册时<b>不</b>激活。未注册的名字会被忽略，因此扩展必须「先全量注册，再由 loader 工具选择性激活」。</li>
+  <li><b>namespace</b>：<code>{ name, description, instructions }</code> 把一组工具聚合（MCP server 天然如此）。<code>instructions</code> 不参与列表展示，脚本用 <code>describeNamespace()</code> 读取。</li>
+  <li><b>prepareLoadout(loadout)</b>：编排型工具可改写<b>声明给模型的描述</b>，并提交 <code>hiddenDeclarations</code>——即「仍是激活状态、仍可调用，但请求里不写它的声明」。</li>
+</ul>
+
+<div class="note">
+  <span class="t">codemode 的自我实现</span>
+  官方文档特别指出：<code>codemode</code> 只用了 <code>prepareLoadout</code> + <code>exposure</code> + <code>ctx.executeTool()</code> 三样东西就实现了自己，<b>没有特权 API</b>。这意味着你可以在自己的工具名下复刻同样的行为——这是判断一个扩展架构是否「真开放」的好试金石。
+</div>
+
+<h3 id="s5-3">5.3 嵌套调用与结构化输出</h3>
+<div class="codewrap">
+  <div class="codehead"><span>工具内调用其它工具</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre>execute: <span class="c-kw">async</span> (toolCallId, params, signal, onUpdate, ctx) =&gt; {
+  <span class="c-cm">// 走完整校验 + tool_call / tool_result 事件；id 形如 &lt;parentCallId&gt;/&lt;n&gt;</span>
+  <span class="c-kw">const</span> res = <span class="c-kw">await</span> ctx.executeTool(<span class="c-str">"grep"</span>, { pattern: <span class="c-str">"TODO"</span> }, { signal, onUpdate });
+  <span class="c-kw">return</span> { content: [{ type: <span class="c-str">"text"</span>, text: summarize(res) }], details: { count: n } };
+}
+
+<span class="c-cm">// 需要给程序化调用者（codemode 脚本）返回数据时，声明 outputSchema</span>
+declare outputSchema;                          <span class="c-cm">// 模型仍拿 content；脚本拿 structuredContent</span>
+<span class="c-kw">return</span> { content: [textBlock], structuredContent: { rows }, details: <span class="c-kw">undefined</span> };
+
+<span class="c-cm">// 既要「失败」又要带数据：不要抛错，而是返回并标记</span>
+<span class="c-kw">return</span> { isError: <span class="c-kw">true</span>, content: [errorText], structuredContent: { partial: rows } };</pre>
+</div>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>嵌套调用契约</th><th>细节</th></tr></thead>
+<tbody>
+<tr><td>事件</td><td>发出 <code>tool_execution_start/update/end</code>，全部携带 <code>parentToolCallId</code></td></tr>
+<tr><td>ID 规则</td><td><code>&lt;父调用 id&gt;/&lt;序号&gt;</code>，这些 id <b>不出现在 transcript</b> 中</td></tr>
+<tr><td>是否入上下文</td><td><b>不</b>新增 transcript 条目；结果只回到调用方工具，由它自己通过 <code>onUpdate</code> / <code>details</code> 上报</td></tr>
+<tr><td>可观测记录</td><td>会话在调用方工具结果消息的 <code>nestedCalls</code> 里保留<b>有界</b>记录（名称/参数/状态/时长/错误，<b>不含结果</b>）：单次参数 &gt; 8KiB 或单结果 &gt; 32KiB 被省略，最多 256 条，溢出时标 <code>complete: false</code></td></tr>
+<tr><td>用量核算</td><td>嵌套结果的 <code>usage</code> 逐层累加到调用方工具的 result <code>usage</code>：每个工具只报告<b>自己</b>的用量，不重复计子工具</td></tr>
+<tr><td>可调用范围</td><td><code>ctx.tools</code> 列出所有可调用工具</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="s5-4">5.4 权限、注解与渲染</h3>
+<p>Pi <b>不会</b>在每次工具调用前询问批准（官方文档明确说明）。权限要靠扩展实现，而工具注解（与 MCP 语义一致）正是为此准备的：</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>注解</th><th>含义</th><th>缺省</th></tr></thead>
+<tbody>
+<tr><td><code>readOnlyHint</code></td><td>只读</td><td>未声明视为非只读</td></tr>
+<tr><td><code>destructiveHint</code></td><td>可能破坏数据</td><td>未声明视为可能破坏</td></tr>
+<tr><td><code>idempotentHint</code></td><td>可安全重试</td><td>—</td></tr>
+<tr><td><code>openWorldHint</code></td><td>会触达外部世界</td><td>未声明视为可能触达</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="codewrap">
+  <div class="codehead"><span>用注解驱动的审批扩展（官方示例改写）</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre>pi.on(<span class="c-str">"tool_call"</span>, <span class="c-kw">async</span> (event, ctx) =&gt; {
+  <span class="c-kw">const</span> hints = pi.getAllTools().find(t =&gt; t.name === event.toolName)?.annotations;
+  <span class="c-kw">const</span> needsApproval =
+    hints?.destructiveHint === <span class="c-kw">true</span> ||
+    (!hints?.readOnlyHint &amp;&amp; ((hints?.destructiveHint ?? <span class="c-kw">true</span>) || (hints?.openWorldHint ?? <span class="c-kw">true</span>)));
+  <span class="c-kw">if</span> (needsApproval &amp;&amp; !(<span class="c-kw">await</span> ctx.ui.confirm(<span class="c-str">"Allow tool call?"</span>, event.toolName)))
+    <span class="c-kw">return</span> { block: <span class="c-kw">true</span>, reason: <span class="c-str">`${event.toolName} was not approved`</span> };
+});</pre>
+</div>
+<p>渲染层：工具可提供 <code>renderCall</code> / <code>renderResult</code>，它们同时作用于交互式 transcript <b>与 HTML 导出</b>；<code>pi.registerToolRenderer((toolName, next) =&gt; renderers)</code> 可为「尚未注册的工具」（例如恢复会话时 MCP server 还没连上）提供兜底渲染。</p>
+
+<!-- ==================== 6 ==================== -->
+<h2 id="s6"><span class="num">06</span>上下文工程</h2>
+
+<h3 id="s6-1">6.1 分节式 System Prompt</h3>
+<p>Pi 的 system prompt <b>不是一坨字符串</b>，而是一组带名字的 section（<code>preamble</code> 无标签，其余包成同名标签）。这些 section 被写入 transcript 的 system 消息里，因此模型「看得见结构」，后续变更可以只发增量补丁。</p>
+
+<div class="codewrap">
+  <div class="codehead"><span>Prompt 装配与增量 diff</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre>buildSystemPromptSections(input)  <span class="c-cm">// → Record&lt;sectionName, text&gt;，section 名受 /^[a-z][a-z0-9_-]*$/ 约束</span>
+buildSystemPromptState(input)     <span class="c-cm">// → { content, sections }：有 sections 时 content 为空</span>
+diffSystemPromptSections(current, desired)  <span class="c-cm">// → SystemMessage.sections 补丁（无变化返回 undefined）</span></pre>
+</div>
+
+<p>可注入面（<code>BuildSystemPromptOptions</code>）：自定义 prompt、<code>selectedTools</code> / <code>hiddenTools</code>、每工具的一句话摘要（<code>toolSnippets</code>）与规则条目（<code>toolGuidelines</code>）、附加规则（<code>promptGuidelines</code>）、<code>appendSystemPrompt</code>、任意 <code>sections</code>、工作目录、项目上下文文件、技能列表。</p>
+
+<p>默认规则的生成是有条件逻辑的（<code>buildRules</code>）：例如「当启用了 bash/powershell 但<b>没有</b> grep/find/ls 时」，才追加「用 shell 做文件操作」的提示；规则会去重，末尾固定追加 <i>Be concise in your responses</i> 与 <i>Show file paths clearly when working with files</i>。</p>
+
+<p>项目上下文文件（<code>AGENTS.md</code> / <code>AGENTS.override.md</code> / <code>CLAUDE.md</code> 等）会被包成 <code>&lt;project_instructions path="..."&gt;</code> 注入——并且<b>不受项目信任门控</b>影响（官方明确提醒：把文件夹里的指令当不可信输入）。</p>
+
+<div class="two">
+  <div>
+    <h4>中途改 prompt 的两种方式</h4>
+    <ul>
+      <li><b>结构化</b>：<code>before_agent_start</code> 事件提供 <code>systemPromptOptions</code>，优先改 section / 工具集 / 指引，让 Pi 追加 transcript 增量</li>
+      <li><b>整体替换</b>：返回 <code>systemPrompt</code> 或设置 <code>forceSystemPrompt</code>，Provider 会收到强制文本作为首条 system 消息（代价：丢失结构化记录）</li>
+    </ul>
+  </div>
+  <div>
+    <h4>技能是「延迟加载」的</h4>
+    <p class="small">启动时只把每个技能的 <b>name / description / path</b> 注入 prompt；任务命中后模型再自行读 <code>SKILL.md</code> 全文。这样既能让模型知道「有这个能力」，又不牺牲 token 预算。</p>
+  </div>
+</div>
+
+<h3 id="s6-2">6.2 压缩（Compaction）：生产级上下文回收</h3>
+<div class="tl-grid">
+  <div class="s"><span class="big">16384</span><span class="lbl">reserveTokens 默认<br><span class="small">留给模型回答</span></span></div>
+  <div class="s"><span class="big">20000</span><span class="lbl">keepRecentTokens 默认<br><span class="small">保留最近多少个 token 的原文</span></span></div>
+  <div class="s"><span class="big">2</span><span class="lbl">摘要机制<br><span class="small">压缩 + 分支摘要</span></span></div>
+</div>
+
+<p><b>触发条件</b>：<code>contextTokens &gt; contextWindow - reserveTokens</code>。检查点有三处：多轮运行中「工具结果写盘后、下一轮 assistant 之前」（<code>prepareNextTurn</code>）、新用户输入之前、以及低层 run 结束后的「溢出兜底恢复」。手动触发为 <code>/compact [instructions]</code>。</p>
+
+<p><b>算法步骤</b>：</p>
+<ol>
+  <li>从最终投影（projection）向后走，累计 token 估算直到超过 <code>keepRecentTokens</code>，定位切点</li>
+  <li>收集「上一次保留边界（或会话起点）→ 切点」之间的消息</li>
+  <li>调用 LLM 生成<b>结构化</b>摘要（有上一份摘要时作为迭代上下文传入）</li>
+  <li>追加 <code>CompactionEntry</code>，记录 <code>summary</code> 与 <code>firstKeptEntryId</code></li>
+  <li>重建上下文 = 摘要 + <code>firstKeptEntryId</code> 起的消息</li>
+</ol>
+
+<div class="codewrap">
+  <div class="codehead"><span>CompactionEntry 结构（session-manager.ts）</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">interface</span> <span class="c-ty">CompactionEntry</span>&lt;T = <span class="c-kw">unknown</span>&gt; {
+  type: <span class="c-str">"compaction"</span>; id: <span class="c-kw">string</span>; parentId: <span class="c-kw">string</span> | <span class="c-kw">null</span>; timestamp: <span class="c-kw">string</span>;
+  summary: <span class="c-kw">string</span>;              <span class="c-cm">// 摘要正文</span>
+  firstKeptEntryId: <span class="c-kw">string</span>;     <span class="c-cm">// 从这里开始保留原文</span>
+  tokensBefore: <span class="c-kw">number</span>;          <span class="c-cm">// 重算后的压缩前 token 数</span>
+  usage?: Usage;                  <span class="c-cm">// 摘要本身的 LLM 用量也计入会话总计</span>
+  details?: T;                    <span class="c-cm">// 默认实现记录 readFiles / modifiedFiles</span>
+}</pre>
+</div>
+
+<p><b>值得注意的细节</b>：</p>
+<ul>
+  <li><b>切点规则</b>：只能落在 user / assistant / bashExecution / custom 消息上，<b>绝不切在 tool result</b>（必须与它的 tool call 同生共死）。</li>
+  <li><b>重复压缩</b>：第二次压缩从「上一次的 <code>firstKeptEntryId</code>」开始，而不是从 compaction 条目本身开始——这样上一轮被保留的原文仍会被纳入下一次摘要，不会被无声丢弃。</li>
+  <li><b>切分长用户消息</b>：若单个 user 消息跨度本身就超过预算，切点会落在该跨度内部的 assistant 消息上，此时生成<b>两份摘要再合并</b>（历史摘要 + 跨度前缀摘要），并标记 <code>isSplitTurn = true</code>。</li>
+  <li><b>溢出/长度恢复顺序</b>：先持久化最终 assistant 响应 → 触发 <code>turn_end</code> / <code>agent_end</code>（扩展可见）→ 为被放弃的尝试追加 <code>context_edit</code> 省略项 → 执行 <code>session_before_compact</code> 并落盘 compaction → <b>作为全新 run 重试</b>。若恢复压缩失败或被取消，保留省略编辑、不追加 compaction、<b>也不调度内部重试</b>。</li>
+  <li><b>原始历史永远保留</b>：被压缩掉的条目仍在文件中，导出、计费、历史检索类扩展依然能查到被省略的尝试。</li>
+</ul>
+
+<h3 id="s6-3">6.3 分支摘要（Branch Summarization）</h3>
+<p>用 <code>/tree</code> 跳到另一条分支时，Pi 会提议把「即将离开的工作」摘要后注入新分支：找新旧位置的<b>最近公共祖先</b> → 收集离开路径上的条目 → 按 token 预算（新的优先）生成摘要 → 在导航点追加 <code>BranchSummaryEntry</code>。与压缩共享同一套结构化格式与<b>累积文件操作追踪</b>。</p>
+<div class="note">
+  <span class="t">为什么这很重要</span>
+  「分支」在多数 agent 实现里等于「丢掉一半工作」。Pi 用一次摘要把左侧历史压成一条条目注入右侧，使「试错后换路线」不至于让模型丧失全部上下文。另外它明确关闭摘要请求的 <b>prompt-cache 写入</b>，因为这种一次性提示几乎不会被复用。
+</div>
+
+<h3 id="s6-4">6.4 缓存经济学与虚拟模型</h3>
+<div class="two">
+  <div>
+    <h4>Prompt 缓存</h4>
+    <ul>
+      <li>用量层区分 <code>cacheRead</code> / <code>cacheWrite</code> / <code>cacheWrite1h</code>（Anthropic 独有），成本分项计入 <code>Usage.cost</code></li>
+      <li><code>cacheWarming</code> 设置三档：<code>off</code> / <code>streaming</code>（默认，运行中保温）/ <code>idle</code>（空闲期也保温）</li>
+      <li>扩展可介入：<code>cache_warming_decision</code> 事件可返回 <code>{action:"warm"|"stop"}</code>，<b>最后一个返回动作的处理器获胜</b></li>
+      <li>保温用量以 <code>kind: "cache_warm"</code> 记入会话（不参与 LLM 上下文）</li>
+      <li><code>showCacheMissNotices</code> 可在发生显著缓存未命中/成功保温/压缩/Provider 恢复时提示</li>
+      <li>自定义 Provider 用 <code>promptCache.short/long</code> 声明缓存存活秒数；未声明则不具备保温资格</li>
+    </ul>
+  </div>
+  <div>
+    <h4>虚拟模型：选择与派发分离</h4>
+    <p><code>pi.registerVirtualModel()</code> 注册一个「可被选中、但每次请求自行路由到物理模型」的模型：</p>
+    <div class="codewrap">
+      <div class="codehead"><span>路由示例</span><span class="lang">text</span><button class="copy">复制</button></div>
+<pre>用户选择:    jev/auto : low
+             ↓ route(request, ctx)
+实际派发:    anthropic/claude-sonnet-4-5 : high</pre>
+    </div>
+    <ul>
+      <li><b>粘性</b>：<code>request.failed ?? request.previous</code>——工具续跑与重试必须留在原模型上，否则缓存与推理连续性都会断</li>
+      <li><b>记录分离</b>：选择写入 <code>model_change</code> / <code>thinking_level_change</code> 条目；派发写入每条 assistant 消息的 <code>provider/api/model/thinkingLevel</code></li>
+      <li>会话恢复时按最新 <code>model_change</code> 还原虚拟选择；虚拟模型已卸载则回退到最后作答的物理模型</li>
+      <li>上下文窗口与压缩阈值都按「实际作答的物理模型」计算</li>
+      <li>交互模式 footer 显示 <code>auto • high → gpt-5.6-luna • medium</code></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== 7 ==================== -->
+<h2 id="s7"><span class="num">07</span>扩展与资源体系</h2>
+<p class="small">源码：<code>packages/coding-agent/src/core/extensions/</code>（25 文件 / 7,456 行）。扩展是 Pi 的主要扩展点：<b>TypeScript 模块，跑在 Pi 进程内</b>（因此拥有与本机用户相同的 OS 权限）。</p>
+
+<h3 id="s7-1">7.1 扩展 API 能力面</h3>
+<p>加载位置：<code>~/.pi/agent/extensions/</code>（用户级）与 <code>.pi/extensions/</code>（项目级，需信任）。用 <code>jiti</code> 直接执行 TS，<b>无需编译</b>；开发时可 <code>pi --extension ./hello.ts</code>。</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>想做的事</th><th>主 API</th></tr></thead>
+<tbody>
+<tr><td>观察/修改生命周期行为</td><td><code>pi.on(event, handler)</code></td></tr>
+<tr><td>新增模型可调用的操作</td><td><code>pi.registerTool()</code></td></tr>
+<tr><td>新增 <code>/</code> 命令</td><td><code>pi.registerCommand()</code></td></tr>
+<tr><td>新增快捷键 / CLI flag</td><td><code>pi.registerShortcut()</code> / <code>pi.registerFlag()</code></td></tr>
+<tr><td>发送用户消息或自定义消息</td><td><code>pi.sendUserMessage()</code> / <code>pi.sendMessage()</code></td></tr>
+<tr><td>持久化「不进模型上下文」的数据</td><td><code>pi.appendEntry()</code></td></tr>
+<tr><td>改当前工具集 / 模型 / 推理等级</td><td><code>pi.setActiveTools()</code> / <code>setModel()</code> / <code>setThinkingLevel()</code></td></tr>
+<tr><td>新增模型 Provider</td><td><code>pi.registerProvider()</code></td></tr>
+<tr><td>新增 MCP server</td><td><code>pi.registerMcpServer()</code></td></tr>
+<tr><td>按请求路由模型</td><td><code>pi.registerVirtualModel()</code></td></tr>
+<tr><td>自定义终端渲染</td><td>渲染器注册 + <code>ctx.ui</code></td></tr>
+<tr><td>扩展之间通信</td><td><code>pi.events</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="codewrap">
+  <div class="codehead"><span>最小扩展（~/.pi/agent/extensions/hello.ts）</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">import type</span> { ExtensionAPI } <span class="c-kw">from</span> <span class="c-str">"@earendil-works/pi-coding-agent"</span>;
+
+<span class="c-kw">export default function</span> (pi: ExtensionAPI) {
+  pi.registerCommand(<span class="c-str">"hello"</span>, {
+    description: <span class="c-str">"Show a greeting"</span>,
+    handler: <span class="c-kw">async</span> (name, ctx) =&gt; {
+      ctx.ui.notify(<span class="c-str">`Hello, ${name || "world"}!`</span>, <span class="c-str">"info"</span>);
+    },
+  });
+}</pre>
+</div>
+
+<div class="warn">
+  <span class="t">生命周期红线（官方明确要求）</span>
+  <b>不要在 factory 里启动进程、socket、watcher、定时器</b>——因为某些调用会加载扩展但<b>不启动会话</b>。长生命周期资源请从 <code>session_start</code> 或真正需要它的命令/工具里启动，并从<b>幂等</b>的 <code>session_shutdown</code> 释放（取消、重载、会话替换、进程退出可能汇聚到同一条路径）。
+</div>
+
+<h3 id="s7-2">7.2 事件模型与并发契约</h3>
+<p>事件覆盖：资源发现、会话生命周期、agent/消息生命周期、Provider、工具、原始输入。</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>事件</th><th>类型</th><th>要点</th></tr></thead>
+<tbody>
+<tr><td><code>project_trust</code></td><td>决策</td><td>只有<b>个人级与命令行</b>扩展能参与（项目扩展尚未加载）</td></tr>
+<tr><td><code>before_agent_start</code></td><td>变换</td><td>提供 prompt + 结构化 <code>systemPromptOptions</code>；优先改 section 而非整体替换</td></tr>
+<tr><td><code>message_end</code></td><td>替换</td><td>可替换已定稿消息（保持 role 不变）</td></tr>
+<tr><td><code>tool_call</code></td><td>可变更/阻止</td><td>可改参数或 <code>{block:true}</code>；<b>处理器抛错会 fail-safe 阻止该工具</b></td></tr>
+<tr><td><code>tool_result</code></td><td>可组合</td><td>每个处理器看到前一个的修改结果；重写 <code>content</code> 时必须同步替换 <code>structuredContent</code>，否则会被丢弃</td></tr>
+<tr><td><code>provider_stream_event</code></td><td>只读通知</td><td>每个**已解析**的 Provider 流事件（非原始 HTTP/SSE 字节）；<b>按流顺序 await</b>，慢处理器会拖慢消费；不持久化</td></tr>
+<tr><td><code>context</code> / <code>context_with_system</code></td><td>变换</td><td>前者不含 prompt/工具 system 消息（事后恢复）；后者要求请求局部变换<b>拥有完整 transcript</b>，且 index 0 必须是 system</td></tr>
+<tr><td><code>turn_end</code> / <code>agent_before_settle</code></td><td>可续跑</td><td>可链式提出 <code>custom</code> / <code>custom_message</code> / <code>context_edit</code> / <code>compaction</code> 条目并 <code>return {continue:true}</code> <b>只续一次</b>（无条件下会死循环）</td></tr>
+<tr><td><code>user_bash</code></td><td>可接管</td><td>返回 <code>undefined</code> 交给下一个处理器/本地执行；返回 <code>operations</code> 或 <code>result</code> 停止传播；<b>处理器失败会阻止命令</b>而非回落本地执行</td></tr>
+<tr><td><code>cache_warming_decision</code></td><td>决策</td><td>最后一个返回动作的处理器获胜</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>并发契约</b>：处理器按<b>注册顺序 await</b>；<code>pi.on()</code> 返回退订函数，且退订不影响正在进行的分发；<b>同一 assistant 消息的工具调用可能并行</b>，因此某个工具事件运行时不能假设「兄弟调用/结果」存在——属于活跃轮次的工作用 <code>ctx.signal</code>，而命令与空闲会话事件通常没有操作信号。</p>
+
+<h3 id="s7-3">7.3 状态该放哪儿</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>状态性质</th><th>存放位置</th></tr></thead>
+<tbody>
+<tr><td>跟随活动分支的工具状态</td><td>工具结果的 <code>details</code></td></tr>
+<tr><td>持久化但<b>不进模型上下文</b>的数据</td><td><code>pi.appendEntry()</code></td></tr>
+<tr><td>自定义内容，<b>要</b>发给模型</td><td><code>pi.sendMessage()</code></td></tr>
+<tr><td>跨会话数据</td><td>外部存储</td></tr>
+</tbody>
+</table>
+</div>
+<div class="warn">
+  <span class="t">分支敏感状态怎么重建</span>
+  在 <code>session_start</code> 时从 <code>ctx.sessionManager.getBranch()</code> 重建，<b>不要</b>遍历文件里的每一条 entry——被放弃的分支代表的是另一条历史。
+</div>
+
+<h3 id="s7-4">7.4 Skills / 模板 / 主题 / Pi Packages</h3>
+<div class="two">
+  <div>
+    <h4>Skills</h4>
+    <p>实现 <a href="https://agentskills.io/specification">Agent Skills 规范</a>。一个目录 + <code>SKILL.md</code>：</p>
+    <div class="codewrap">
+      <div class="codehead"><span>SKILL.md</span><span class="lang">markdown</span><button class="copy">复制</button></div>
+<pre>---
+name: pdf-tools
+description: Extract text and tables from
+  PDF files. Use when reading, converting,
+  or inspecting PDFs.
+---
+
+# PDF tools
+Read references/formats.md before converting.</pre>
+    </div>
+    <ul>
+      <li>发现位置：用户/项目 skills 目录，以及 <code>~/.agents/skills/</code>、<code>.agents/skills/</code>（项目级会向上查找祖先目录，遇到仓库根停止）</li>
+      <li>可用字段：<code>name</code>、<code>description</code>、<code>license</code>、<code>compatibility</code>、<code>metadata</code>、<code>allowed-tools</code>（实验）、<code>disable-model-invocation</code></li>
+      <li>强制加载：<code>/skill:name args</code>；编辑后用 <code>/reload</code> 生效</li>
+    </ul>
+  </div>
+  <div>
+    <h4>Pi Packages（分发单元）</h4>
+    <p>把 extensions / skills / prompts / themes 作为一个包通过 npm 或 git 分发：</p>
+    <div class="codewrap">
+      <div class="codehead"><span>安装与清单</span><span class="lang">bash</span><button class="copy">复制</button></div>
+<pre>pi install npm:@example/pi-tools@1.0.0
+pi install git:github.com/example/pi-tools@v1
+pi install ./local-package
+pi list   <span class="c-cm"># 查看已装</span>
+pi -e npm:@example/pi-tools   <span class="c-cm"># 单次试用</span></pre>
+    </div>
+    <div class="codewrap">
+      <div class="codehead"><span>package.json 的 pi 清单</span><span class="lang">json</span><button class="copy">复制</button></div>
+<pre>{
+  "name": "my-pi-package",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./src/extension.ts"],
+    "skills":     ["./resources/skills"],
+    "prompts":    ["./resources/prompts/*.md"],
+    "themes":     ["./resources/themes/*.json"]
+  }
+}</pre>
+    </div>
+    <p class="small">无 <code>pi</code> 清单时按约定目录自动发现。npm 版本与 git tag/commit 均被固定；<code>--local</code> 写入项目设置（需信任才加载）。项目包安装/加载都在信任决策之后。</p>
+  </div>
+</div>
+
+<h4>内置扩展与「可替换」机制</h4>
+<p>CLI 会加载三个内置扩展：<code>codemode</code>、<code>tool_search</code>、<code>mcp</code>。SDK 会话<b>不会</b>自动加载，需要把它们加进 <code>DefaultResourceLoader</code> 的 <code>extensionFactories</code>。其中 <code>codemode</code> 与 <code>tool_search</code> 默认<b>注册但不激活</b>——由 <code>defaultTools</code> 设置（如 <code>["+codemode", "+tool_search"]</code>）或 MCP 扩展按需激活（<code>codemode</code> 暴露的 server 激活前者，<code>deferred</code> 激活后者）。</p>
+<p>内置扩展以 <code>builtin:&lt;name&gt;</code> 形式存在，可用 <code>-builtin:&lt;name&gt;</code> 禁用；具名内联扩展可声明 <code>replaceable: true</code>，当别的扩展注册了同名工具/命令/flag 时自动让位（三内置扩展均为 replaceable）。</p>
+
+<!-- ==================== 8 ==================== -->
+<h2 id="s8"><span class="num">08</span>Codemode 与 MCP</h2>
+
+<h3 id="s8-1">8.1 Codemode：把编排下沉到脚本</h3>
+<p>动机很直接：<b>多步工具调用的中间结果不必进入模型上下文</b>。模型写一段 JS，在沙箱里调用工具、过滤/聚合数据，只把结论回传。官方 README 的定位是：<i>在 QuickJS(WebAssembly) 里运行模型写的 JavaScript，唯一能力是调用被注入的工具</i>。</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>运行环境</th><th>沙箱类</th><th>导入自</th><th>执行位置</th></tr></thead>
+<tbody>
+<tr><td>Node / Bun</td><td><code>CodemodeSandbox</code></td><td><code>@earendil-works/pi-codemode</code></td><td>每次执行一个 worker thread</td></tr>
+<tr><td>Cloudflare Workers / DO</td><td><code>RemoteCodemodeSandbox</code></td><td><code>@earendil-works/pi-codemode/portable</code></td><td>独立部署 Worker 里的 Durable Object</td></tr>
+<tr><td>其它运行时</td><td><code>InlineCodemodeSandbox</code></td><td>同上</td><td>调用线程内（会阻塞调用方）</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="two">
+  <div>
+    <h4>脚本环境</h4>
+    <div class="codewrap">
+      <div class="codehead"><span>可用全局</span><span class="lang">text</span><button class="copy">复制</button></div>
+<pre>tools.&lt;name&gt;(args)        调用工具（非标识符字符→ _）
+ALL_TOOLS                所有可调用工具 {name, description}
+text(v) / image(v)       追加输出条目
+console.log(...)         归入 &lt;console_output&gt;
+return v / exit()        顶层 return 等价于 text()
+store(k,v) / load(k)     跨 codemode 调用的小型 JSON 状态
+searchTools(q,{limit,namespace})   BM25 排序，默认 8 条
+describeTool(name) / describeNamespace(name)
+models                   运行非 LLM 模型（分类器 / 图像）</pre>
+    </div>
+    <p class="small">沙箱内<b>没有</b> Node API、文件系统、网络、定时器；脚本体是 async 函数体，支持顶层 <code>await</code> 与 <code>return</code>。</p>
+  </div>
+  <div>
+    <h4>边界与限额</h4>
+    <ul>
+      <li>首行可写 <code>// @options: {"max_output_tokens":2000,"timeout_ms":60000}</code></li>
+      <li><code>max_output_tokens</code> 默认 <b>10000</b>；超长输出保留首尾，完整文本写入临时文件并在结果里给出路径</li>
+      <li>硬上限：文本 + base64 图像合计 <b>16,777,216</b> 字符，或 <code>text()/image()/console</code> 调用合计 <b>100000</b> 次即失败</li>
+      <li><code>timeout_ms</code> 默认不设（图像生成可能耗时数分钟，别设太短）</li>
+      <li>工具调用<b>是真执行</b>：失败前的调用不会回滚；脚本结束时仍在运行的调用被取消，未 await 的 Promise 被丢弃</li>
+      <li><code>store</code>：单值 ≤ 262,144 字符，总量 ≤ 1,048,576；仅脚本成功时保留，落为会话中的 <code>codemode-store</code> 自定义条目（<b>按分支可见</b>）</li>
+    </ul>
+  </div>
+</div>
+
+<p><b>工具调用的返回值形态</b>：声明了 <code>outputSchema</code> 的工具返回结构化值。以 <code>bash</code> 为例，脚本拿到的是 <code>{ output, truncated, full_output_path?, exit_code, wall_time_seconds }</code>（即使退出码非零）——<code>output</code> 上限 <b>1 MiB</b>，超长时保留首尾各 512 KiB 并在中间插省略标记。未声明 schema 的工具返回文本内容。</p>
+
+<p><b>与模型可见性的配合</b>：<code>codemode.mode = on</code>（默认）时其它工具仍被声明，只在描述里说明「如何从脚本调用」；<code>only</code> 时它们对模型隐藏，只能经脚本调用。codemode 描述里的工具声明共享 <b>3000 估算 token</b> 的预算（<code>codemode.inlineBudget</code>），因此 <code>deferred</code> 工具不列出——这也是「MCP server 连接前后描述保持一致」的原因。</p>
+
+<div class="insight">
+  <span class="t">为什么这是「省钱 + 变强」双赢</span>
+  传统 agent 里，一次「列出 200 个文件 → 过滤 → 读 3 个」的流程会把 200 行输出全塞进上下文。codemode 让这段逻辑跑在沙箱里，模型只看到脚本的最终输出。<b>并且它同时提升能力上限</b>：脚本能并行调用（<code>Promise.allSettled</code>）、能组合工具能力，而模型不必「记住」中间态。
+</div>
+
+<h3 id="s8-2">8.2 MCP 集成</h3>
+<p>Pi <b>没有</b>用官方 MCP SDK，而是自研了一个小而独立的客户端（<code>pi-mcp</code>）：传输无关的客户端核心 + stdio 传输 + Streamable HTTP 传输 + 内存测试传输。这样做的收益是依赖面极小、可注入 fetch（便于代理）、并能针对 Pi 的语义做适配。</p>
+
+<div class="codewrap">
+  <div class="codehead"><span>把 MCP 工具包装成 AgentTool（pi-mcp README）</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">const</span> tools: AgentTool[] = (<span class="c-kw">await</span> client.listTools()).map(tool =&gt; ({
+  name: tool.name,                 <span class="c-cm">// 注意：Provider 限制 ≤ 64 字符 [A-Za-z0-9_-]</span>
+  description: tool.description,
+  parameters: tool.inputSchema,
+  execute: <span class="c-kw">async</span> (id, args) =&gt; toLlmContent(<span class="c-kw">await</span> client.callTool(tool.name, args)),
+}));
+<span class="c-cm">// toLlmContent：文本/图片原样透传，嵌入资源解包，音频/resource link/二进制转短占位文本</span></pre>
+</div>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>配置面</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>文件位置</td><td>用户级 <code>~/.pi/agent/mcp.json</code>；项目级 <code>.pi/mcp.json</code>（需项目信任）</td></tr>
+<tr><td>覆盖规则</td><td>同名时项目条目替换用户条目；若项目条目不含 <code>command/url/type</code>，则只覆盖 <code>enabled</code> / <code>exposure</code> / <code>toolExposure</code>，其余（env、headers、auth）保留——常用于「在本项目里关掉某个用户级 server」</td></tr>
+<tr><td>命令</td><td><code>pi mcp add|list|login|logout</code>；交互内 <code>/mcp</code> 可查看连接、登录、重连、改暴露级别、启停</td></tr>
+<tr><td>与工具暴露联动</td><td>server 的 <code>exposure: "codemode"</code> 会激活 codemode；<code>deferred</code> 会激活 <code>tool_search</code></td></tr>
+<tr><td>扩展注册</td><td><code>pi.registerMcpServer(name, config)</code>（加载期注册的随会话启动连接；之后注册的立即连接；<code>unregister</code> 关闭连接）。注册<b>不落盘</b>，每次加载都要重新注册</td></tr>
+<tr><td>质量保障</td><td>仓库内含 <code>test/mcp-conformance</code> 测试套件，CI 里有独立 job</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ==================== 9 ==================== -->
+<h2 id="s9"><span class="num">09</span>会话、持久化与远程执行</h2>
+
+<h3 id="s9-1">9.1 JSONL 会话树</h3>
+<div class="codewrap">
+  <div class="codehead"><span>文件位置与格式</span><span class="lang">text</span><button class="copy">复制</button></div>
+<pre>~/.pi/agent/sessions/--&lt;路径净化后&gt;--/&lt;时间戳&gt;_&lt;session-id&gt;.jsonl
+<span class="c-cm">// 路径净化：去掉前导分隔符，把 / \ : 都替换成 -</span></pre>
+</div>
+<ul>
+  <li>每条 entry 有 <code>id</code> / <code>parentId</code>，形成<b>树</b>；<code>currentEntry</code> 指向活动叶子，其路径就是「活动分支」，决定下一次模型请求的历史。</li>
+  <li>版本演进：v1 线性 → v2 引入树 → v3 把 <code>hookMessage</code> 角色改名为 <code>custom</code>（统一扩展）。加载时自动迁移到当前版本。</li>
+  <li>从更早的 entry 继续对话＝在同文件里<b>再开一条分支</b>；fork / clone 会把选中的历史复制进新文件。</li>
+  <li>删除：直接删 <code>.jsonl</code>；交互式 <code>/resume</code> 里 <kbd>Ctrl+D</kbd> 可删，若系统有 <code>trash</code> CLI 则走回收站。</li>
+</ul>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>entry 类型</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td><code>message</code></td><td>一条 <code>AgentMessage</code>（含所有内容块、用量、时间戳）</td></tr>
+<tr><td><code>compaction</code></td><td>压缩摘要 + <code>firstKeptEntryId</code> + 压缩前 token 数</td></tr>
+<tr><td><code>branch_summary</code></td><td>分支导航时注入的左分支摘要</td></tr>
+<tr><td><code>model_change</code> / <code>thinking_level_change</code></td><td>模型与推理等级选择（虚拟模型也记在此）</td></tr>
+<tr><td><code>context_edit</code></td><td>对上下文的编辑（如溢出恢复时的省略项）</td></tr>
+<tr><td><code>custom</code> / <code>custom_message</code></td><td>扩展数据：前者不进模型上下文，后者会发送给模型</td></tr>
+<tr><td><code>session_info</code></td><td>会话元信息（名称等）</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="warn">
+  <span class="t">SDK 使用者必读</span>
+  <b>SessionManager 是最终模型上下文的权威</b>。想注入外部历史，必须用包含这些 entry 的 manager 构造会话；<b>不要</b>通过给 <code>session.agent.state.messages</code> 赋值来改上下文。另外 <code>AgentSessionRuntime</code> 的 <code>newSession()/switchSession()/fork()/importFromJsonl()</code> 会<b>替换</b>活动的 <code>AgentSession</code> 并重建服务——旧的订阅必须重新绑定。
+</div>
+
+<h3 id="s9-2">9.2 Durable：崩溃安全的嵌入式 Harness</h3>
+<p><code>pi-durable</code>（22,473 行，标注 experimental）解决的是另一个场景：<b>把 agent 做成可恢复的服务</b>。核心承诺是「先提交、后展示」——对话、模型轮次、工具调用和你自己的状态都先写入存储，再对外可见；进程中途死掉，重新打开存储就能接着跑。</p>
+<div class="two">
+  <div>
+    <h4>关键概念</h4>
+    <ul>
+      <li><code>Harness.open(storage, services, context)</code> → <code>root()</code> 生根会话</li>
+      <li><b>任务图</b>与子任务（child tasks）、多会话与 fork、reset/handoff</li>
+      <li><b>按会话的 agent</b>、可重载（reload）、hooks</li>
+      <li><b>ExecutionEnv</b> 抽象：本地 Node / 远程 <code>RemoteExecutionEnv</code> 语义一致（有 conformance 测试套件）</li>
+      <li>存储抽象（<code>MemoryStorage</code> 等），并发/忙碌会话处理、用量与成本</li>
+      <li>基于 <code>chord</code> 的文档状态与 delta 复制，为「同一会话多方观察」做准备</li>
+    </ul>
+  </div>
+  <div>
+    <h4>什么时候值得用它</h4>
+    <p class="small">需要「agent 作为长时任务服务」时：Worker/Serverless 场景、需要进程重启后继续、需要多个前端同时观察同一会话。若只是本地 CLI 或进程内一次性调用，用 <code>pi-coding-agent</code> 的 SDK 更简单——额外的持久化层是有成本的（状态机、调度、并发语义都要理解）。</p>
+  </div>
+</div>
+
+<h3 id="s9-3">9.3 远程执行与协议栈</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>包</th><th>职责</th><th>关键设计</th></tr></thead>
+<tbody>
+<tr><td><code>pi-env</code></td><td>让工具在另一台机器上跑</td><td>Rust daemon 经 SSH 部署（<b>按 SHA-256 命名并在每次启动前校验</b>）；stdin/stdout 帧协议；<code>ssh</code> 使用 BatchMode、严格 host key（独立 known_hosts + 固定别名）、<b>无任何端口转发</b>；支持 Linux/macOS/Android(Termux)/Windows × x86-64/arm64</td></tr>
+<tr><td><code>pi-protocol</code></td><td>线上协议（experimental v8）</td><td>4 字节大端长度 + 定长 CBOR 项；路由信封 <code>{serverId}</code> 或 <code>{serverId, sessionId, attachmentId}</code>；载荷为<b>不透明严格 JSON</b>；默认限额 16 MiB/帧、1,000,000 元素、64 层嵌套；<b>无兼容保证</b></td></tr>
+<tr><td><code>pi-client</code></td><td>传输无关客户端</td><td>先握手校验逻辑 <code>serverId</code> 与物理端点一致；<b>不自动重连、不重放</b>；订阅先收完整快照再 <code>start()</code> 释放缓冲更新</td></tr>
+<tr><td><code>pi-server</code></td><td>本地服务器</td><td>把连接路由到<b>应用托管的 durable Session</b>；一个会话可挂多个 presentation；重复 attach 幂等；断连后等已接受的调用结算完才释放 attachment；server 只校验路由、不解业务载荷</td></tr>
+<tr><td><code>chord</code></td><td>服务语义层</td><td>facets（可拆到不同进程/环境的插件片段）、singleton/keyed 服务、复制状态（原子 overlay 事务 + 不可变快照 + delta 编解码）。协议层只验证「是严格 JSON」，语义由 chord 在服务适配边界解析</td></tr>
+<tr><td><code>pi-telemetry</code></td><td>遥测</td><td>只提供契约：显式的 <code>TelemetryContext</code> / <code>TelemetrySpan</code>、<code>NOOP_TELEMETRY_CONTEXT</code>、内存参考实现 + 一致性测试；<b>无 exporter、无全局 current-span 状态</b>，由应用接 OpenTelemetry/Sentry</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ==================== 10 ==================== -->
+<h2 id="s10"><span class="num">10</span>接入方式总览</h2>
+<p>五种接入形态共用同一套 agent 与 session 机制（官方 how-pi-works 明确说明）。</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>方式</th><th>入口</th><th>适用场景</th><th>扩展 UI 支持</th></tr></thead>
+<tbody>
+<tr><td><b>TUI</b></td><td><code>pi</code></td><td>人机交互、长会话</td><td>完整终端组件</td></tr>
+<tr><td><b>Print</b></td><td><code>pi --print "..."</code></td><td>一次性任务、管道（<code>git diff | pi --print</code>）</td><td>无 UI</td></tr>
+<tr><td><b>JSON</b></td><td><code>pi --mode json</code></td><td>程序消费事件流（JSONL）</td><td>无 UI</td></tr>
+<tr><td><b>RPC</b></td><td><code>pi --mode rpc</code></td><td>跨语言/隔离进程驱动，stdin 命令 + stdout 事件</td><td>可经 RPC 扩展 UI 协议转发对话框（不支持自定义终端组件）</td></tr>
+<tr><td><b>SDK</b></td><td><code>import ... from "@earendil-works/pi-coding-agent"</code></td><td>Node/Bun 进程内嵌入，直接操作 TypeScript 对象</td><td>进程内直接访问</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="codewrap">
+  <div class="codehead"><span>SDK 最小会话</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">import</span> { createAgentSession } <span class="c-kw">from</span> <span class="c-str">"@earendil-works/pi-coding-agent"</span>;
+
+<span class="c-kw">const</span> { session } = <span class="c-kw">await</span> createAgentSession();   <span class="c-cm">// 复用工作目录、已发现的资源、设置与凭据</span>
+<span class="c-kw">const</span> unsub = session.subscribe(e =&gt; {
+  <span class="c-kw">if</span> (e.type === <span class="c-str">"message_update"</span> &amp;&amp; e.assistantMessageEvent.type === <span class="c-str">"text_delta"</span>)
+    process.stdout.write(e.assistantMessageEvent.delta);
+});
+<span class="c-kw">try</span> { <span class="c-kw">await</span> session.prompt(<span class="c-str">"What files are in the current directory?"</span>); }
+<span class="c-kw">finally</span> { unsub(); session.dispose(); }</pre>
+</div>
+
+<p><b>可替换的服务边界</b>（<code>createAgentSession</code> 的选项）：<code>modelRuntime</code> / <code>model</code> / <code>thinkingLevel</code> / <code>scopedModels</code>、<code>settingsManager</code>（文件或内存）、<code>sessionManager</code>（持久或内存）、<code>resourceLoader</code>（<code>DefaultResourceLoader</code> 或完全自定义）、<code>tools</code> / <code>noTools</code> / <code>excludeTools</code> / <code>customTools</code>、以及 <code>cwd</code>（影响项目资源发现与内置工具路径）。仓库里有 <b>14 个检入 CI 的 SDK 示例</b>（<code>examples/sdk/01-minimal.ts</code> … <code>14-codemode-mcp.ts</code>），可直接当模板。</p>
+
+<p><b>CLI 关键 flag</b>（<code>src/cli/args.ts</code>，共 40+ 项）：模型类 <code>--model/--provider/--thinking/--models/--list-models/--api-key</code>；会话类 <code>--continue/--resume/--session/--session-id/--session-dir/--fork/--name</code>；资源类 <code>--extension/--skill/--prompt-template/--theme/--no-extensions/--no-skills/--no-context-files/--no-mcp/--no-builtin-tools</code>；信任类 <code>--approve/--no-approve</code>；输出类 <code>--print/--mode/--export/--verbose/--tui-mode/--offline</code>。另有子命令：<code>pi install/remove/uninstall/update/list/config/auth/mcp</code>。</p>
+
+<div class="note">
+  <span class="t">顺手一提</span>
+  <code>/export</code> 会把会话导出为<b>单文件 HTML</b>（<code>src/core/export-html/</code>：55 行模板 + 1,918 行模板脚本 + CSS + ANSI→HTML 转换 + 工具渲染器），这正是本报告参考的「自包含静态报告」思路。
+</div>
+
+<!-- ==================== 11 ==================== -->
+<h2 id="s11"><span class="num">11</span>工程实践借鉴</h2>
+<p class="small">本章是「如何为一个 agent 项目写规范」的样本。Pi 仓库的 <code>AGENTS.md</code>（125 行）本身值得通读——它是写给 agent 读的规则，也是给人读的工程共识。</p>
+
+<h3>11.1 为「多 Agent 并行」写的 Git 纪律</h3>
+<div class="quote"><span class="t">AGENTS.md 原文要点</span>Multiple pi sessions may be running in this cwd at the same time, each modifying different files. Git operations that touch unstaged, staged, or untracked files outside your own changes will stomp on other sessions' work.</div>
+<ul>
+  <li><b>禁止</b>：<code>git add -A</code> / <code>git add .</code>、<code>git reset --hard</code>、<code>git checkout .</code>、<code>git clean -fd</code>、<code>git stash</code>、<code>git commit --no-verify</code>、force push</li>
+  <li><b>提交要求</b>：只 <code>git add &lt;明确路径&gt;</code>；提交前先 <code>git status</code> 自查；信息格式 <code>{feat,fix,docs}[(ai,tui,agent,coding-agent)]: &lt;message&gt;</code></li>
+  <li><b>冲突处理</b>：只解决自己改过的文件的冲突；冲突出现在未改动的文件 → <b>中止并询问用户</b></li>
+  <li><b>模型目录例外</b>：<code>models.generated.ts</code> 允许随时一并提交（因为是生成物）</li>
+</ul>
+
+<h3>11.2 代码与测试规范</h3>
+<div class="two">
+  <div>
+    <h4>代码</h4>
+    <ul>
+      <li>禁用 <code>any</code>（除非绝对必要）；单调用点的小助手函数<b>内联</b></li>
+      <li><b>禁止内联 import</b>（<code>await import()</code>、<code>import("pkg").Type</code>、动态类型 import），一律顶层 import</li>
+      <li>只使用可擦除 TS 语法（Node strip-only）；不用 <code>enum</code>/<code>namespace</code>/参数属性</li>
+      <li>不要为了修类型错误而降级代码，升级依赖</li>
+      <li>键位判断不许硬编码（<code>matchesKey(data,"ctrl+x")</code>），必须加到可配置的默认键位表</li>
+      <li>「看起来是刻意写的功能」要删除前必须先问用户</li>
+    </ul>
+  </div>
+  <div>
+    <h4>测试</h4>
+    <ul>
+      <li>根目录 <code>./test.sh</code> 跑全部 <b>非 e2e</b> 用例；<b>禁止</b>直接跑完整 vitest（含依赖真实端点的 e2e）</li>
+      <li><code>coding-agent/test/suite/</code> 必须用 <code>harness.ts</code> + <b>faux Provider</b>——不许真实 API key 或付费 token</li>
+      <li>回归测试旁标注对应 issue 编号</li>
+      <li>改代码后跑 <code>npm run check</code>（必须修掉所有 error/warning/info），但 <b>不</b>擅自跑 build / 全量 test</li>
+      <li>临时脚本写到 <code>/tmp</code> 文件里执行，不要塞进多行 bash 命令</li>
+    </ul>
+  </div>
+</div>
+
+<h3>11.3 CI 与质量门禁</h3>
+<div class="flow">
+  <span class="step a">npm ci --ignore-scripts</span><span class="arw">→</span>
+  <span class="step">build</span><span class="arw">→</span>
+  <span class="step a">check（8 道门禁）</span><span class="arw">→</span>
+  <span class="step">构建 pi-env daemon</span><span class="arw">→</span>
+  <span class="step">npm test</span>
+</div>
+<p>其中 <code>npm run check</code> 串起了：<code>biome check --error-on-warnings</code>、<code>check:pinned-deps</code>（依赖必须精确锁定）、<code>check:runtime-deps</code>、<code>check:ts-imports</code>、<code>check:entry-graphs</code>（入口依赖图）、<code>check:install-lock:coding-agent</code>、<code>tsc --noEmit</code>、<code>check:browser-smoke</code>。CI 还有独立的 <code>mcp-conformance</code>、<code>env-daemons</code>、<code>nix</code>、<code>npm-audit</code>、<code>publish-model-catalog</code> workflow。</p>
+
+<div class="insight">
+  <span class="t">值得复制的「元规范」</span>
+  这份仓库把「如何让 agent 安全地参与开发」写成了<b>可执行的约束</b>：限制破坏性 git 命令、强制精确依赖、强制测试用 faux provider、禁止未请求就 build/test。<b>重点不在于规则本身，而在于它们都能被机器或审查者一眼校验</b>——这是把 agent 从「聪明但不靠谱」变成「可协作」的关键。
+</div>
+
+<h3>11.4 Pi 用 Pi 开发 Pi</h3>
+<p>仓库根目录的 <code>.pi/</code> 是 Pi 给<b>自己</b>用的配置，它是「自举」最好的证据：</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>目录</th><th>内容</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>.pi/extensions/</code></td><td><code>tps.ts</code>（每秒 token 统计）、<code>redraws.ts</code>（渲染诊断）、<code>prompt-url-widget.ts</code>、<code>import-repro.ts</code></td><td>开发者自己日常使用的扩展，全部是真实用例</td></tr>
+<tr><td><code>.pi/prompts/</code></td><td><code>cl.md</code>（changelog）、<code>wr.md</code>、<code>is.md</code>、<code>sa.md</code>、<code>pr.md</code>、<code>deslop.md</code>、<code>dup.md</code></td><td>把重复性工作变成可复用的提示模板</td></tr>
+<tr><td><code>.pi/skills/</code></td><td><code>release.md</code>、<code>add-llm-provider.md</code>、<code>interactive-testing.md</code></td><td><b>发布流程与新 Provider 接入被写成技能</b>；<code>AGENTS.md</code> 直接要求 agent「加载并遵循」它</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">交互模式的自动化测试用 tmux（见 <code>.pi/skills/interactive-testing.md</code>）；有专门的 <code>profile:tui</code> / <code>profile:rpc</code> 性能分析脚本；还有 <code>scripts/issues</code> 本地 issue 分诊工具。</p>
+
+<h3>11.5 发布与贡献门禁</h3>
+<div class="two">
+  <div>
+    <h4>分发与升级</h4>
+    <ul>
+      <li><code>curl -fsSL https://pi.dev/install.sh | sh</code>（Windows 有 install.ps1）——安装器会<b>固定所有依赖</b>，升级走 <code>pi update</code></li>
+      <li>也可 <code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent</code>（但不会固定传递依赖）</li>
+      <li>Nix：<code>nix profile add github:earendil-works/pi/stable</code></li>
+      <li>打包门禁：<code>prepublishOnly</code> = clean + build + check；另有 <code>check:package-install</code> 与 <code>scripts/pack-packages.mjs</code></li>
+      <li>版本同步：<code>version:patch/minor/major</code> 跨 workspace 统一版本 + 同步脚本</li>
+    </ul>
+  </div>
+  <div>
+    <h4>贡献门禁</h4>
+    <ul>
+      <li>新贡献者的 issue 与 PR 会被<b>工作流自动关闭</b>，维护者每日复审（<code>pr-gate</code> / <code>issue-gate</code> / <code>approve-contributor</code>）</li>
+      <li><code>CONTRIBUTING.md</code> 定义质量门槛与 <code>lgtm</code> / <code>lgtmi</code> 标记</li>
+      <li>标签体系：<code>pkg:agent</code>、<code>pkg:ai</code>、<code>pkg:coding-agent</code>、<code>pkg:tui</code> 等</li>
+      <li>AI 生成的评论需带免责声明行；提交信息禁 emoji、禁客套话</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== 12 ==================== -->
+<h2 id="s12"><span class="num">12</span>批判性评估</h2>
+
+<h3>12.1 设计上真正突出的地方</h3>
+<div class="cards">
+  <div class="card"><div class="n">优点 01</div><h5>状态权威唯一化</h5><p>Transcript / SessionManager / loadout / 凭据各自有唯一权威，且在文档里反复警告。这直接消灭了 agent 项目里最常见的一类 bug：上下文与 UI 看到的不一致。</p></div>
+  <div class="card"><div class="n">优点 02</div><h5>工具暴露分级</h5><p>把「声明」与「可调用」拆开，并用 <code>prepareLoadout</code> 允许编排工具接管自己的呈现。在工具数量爆炸（MCP 时代）的今天，这比「全量塞 schema」高出两个档次。</p></div>
+  <div class="card"><div class="n">优点 03</div><h5>Token 经济是一等公民</h5><p>codemode（中间结果不进上下文）、截断 + 指路、技能延迟加载、缓存保温与命中提示、按请求路由的虚拟模型——几乎每一项都在省 token 或省钱。</p></div>
+  <div class="card"><div class="n">优点 04</div><h5>上下文回收是生产级的</h5><p>切点规则、重复压缩的边界回退、长用户消息的拆分双摘要、溢出恢复的严格顺序、原始历史永不删除——这些细节是「真的上过生产」的痕迹。</p></div>
+  <div class="card"><div class="n">优点 05</div><h5>可嵌入性与可替换性</h5><p>Tool / Provider / Settings / SessionManager / ResourceLoader / AgentSession 每一层都有工厂与接口，且有 <b>14 个检入 CI 的 SDK 示例</b>作为使用契约。</p></div>
+  <div class="card"><div class="n">优点 06</div><h5>工程过程本身严谨</h5><p>faux Provider 禁止真实 API、入口依赖图检查、生成物禁止手改、安装锁校验、多 agent 并行工作的 git 纪律——都可直接搬到自己的仓库。</p></div>
+</div>
+
+<h3>12.2 代价与风险</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>风险</th><th>具体表现</th><th>影响面</th><th>缓解手段</th></tr></thead>
+<tbody>
+<tr><td><b>无内置沙箱</b></td><td>官方文档直说：工具使用 Pi 进程的 OS 权限，扩展与 Pi 同进程同权限；项目信任<b>不是</b>启动边界，也不限制工具能访问什么</td><td class="con">高</td><td>容器 / VM / 专用低权限账户；只给必要凭据；<code>pi-env</code> 只把工具放到隔离环境</td></tr>
+<tr><td><b>实验包无兼容保证</b></td><td>durable / server / client / protocol / env / evals 均标注 experimental；protocol 自述 “no compatibility guarantees”</td><td class="con">中高</td><td>锁 tag、少升级；将协议层包在自适应的适配器后</td></tr>
+<tr><td><b>概念负载重</b></td><td>transcript 权威 + sections + exposure + loadout + 投影/压缩 + 四种模式，理解成本不低（应用层 8.6 万行）</td><td class="con">中</td><td>从 SDK + 少量扩展切入，不要一上手就改内核</td></tr>
+<tr><td><b>外部数据源依赖</b></td><td>模型目录由 models.dev / OpenRouter / AI Gateway 等聚合生成，原始 data 目录不入库</td><td class="con">中</td><td><code>build:offline</code>；内网手工声明 <code>modelOverrides</code></td></tr>
+<tr><td><b>会话内容无加密</b></td><td>JSONL 明文，可能包含 prompt、工具参数、命令输出、文件内容与泄露的凭据；<code>/export</code> 与 <code>/share</code> 会把它带出去</td><td class="con">中</td><td>导出/分享前审查；把会话目录当作敏感数据管理</td></tr>
+<tr><td><b>Bus factor</b></td><td>全历史 6,839 commits 中 57% 来自单一作者（Mario Zechner）</td><td class="con">中低</td><td>评估时看维护者结构与发布节奏；关注企业级分支/商用服务</td></tr>
+<tr><td><b>运行时门槛</b></td><td>Node ≥ 22.19，且要求可擦除 TS 语法；codemode 依赖 WASM，<code>pi-env</code> 依赖 Rust 构建链</td><td class="con">低</td><td>CI 固定 Node 版本；优先用官方安装器而非裸 npm</td></tr>
+<tr><td><b>扩展信任面</b></td><td>扩展能读 prompt、工具调用、文件、凭据与会话历史；项目扩展需信任后才加载</td><td class="con">中</td><td>只装可信来源；审查 Pi package 源码；用 <code>--no-extensions</code> 做基线对照</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>12.3 同类方案定位对比</h3>
+<p class="small">下表为基于公开认知的定位对比，<b>本次未对其它项目做同等深度的源码核对</b>，仅用于帮你判断「该往哪一个方向评估」。</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>维度</th><th>Pi</th><th>闭源编码 agent CLI（Claude Code / Codex CLI 类）</th><th>图式编排库（LangGraph / AutoGen 类）</th><th>服务型 Agent 平台（OpenHands 类）</th></tr></thead>
+<tbody>
+<tr><td>内核可嵌入</td><td class="pro">✅ TypeScript SDK，多层可替换</td><td>❌ 基本只能当进程调</td><td>✅ 库本身就是内核</td><td>⚠️ 以服务形态为主</td></tr>
+<tr><td>自带终端 UI / 会话</td><td class="pro">✅ TUI + JSONL 会话树 + 压缩</td><td>✅</td><td>❌ 自己写</td><td>✅（Web UI）</td></tr>
+<tr><td>工具/上下文经济</td><td class="pro">✅ 五级暴露 + codemode</td><td>⚠️ 黑盒</td><td>⚠️ 自行设计</td><td>⚠️ 自行设计</td></tr>
+<tr><td>分布式/远程</td><td>✅（实验）durable + protocol + env</td><td>❌</td><td>⚠️ 自建</td><td>✅</td></tr>
+<tr><td>多 Agent 编排</td><td class="con">❌ 有意不做，交给扩展</td><td>⚠️ 有限</td><td class="pro">✅ 核心能力</td><td>✅</td></tr>
+<tr><td>内置沙箱</td><td class="con">❌ 靠部署层</td><td>✅ 平台提供</td><td>❌</td><td>✅ 容器</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="insight">
+  <span class="t">适合与不适合</span>
+  <b>适合</b>：想做自己的编码/终端 Agent 产品、需要深度定制工具与上下文策略、有内网/合规要求需要自托管与私有模型接入、团队愿意投入 1～2 周读源码。<br>
+  <b>不适合</b>：只想要开箱即用的 SaaS、需要内置多 Agent 编排图、需要厂商提供 SLA 与安全沙箱、不想碰 TypeScript。
+</div>
+
+<!-- ==================== 13 ==================== -->
+<h2 id="s13"><span class="num">13</span>二次开发实战指南</h2>
+
+<h3>13.1 选路：你想做什么，就用哪一层</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>需求</th><th>用哪一层</th><th>入口</th></tr></thead>
+<tbody>
+<tr><td>加一个模型可调用的能力</td><td>扩展</td><td><code>pi.registerTool()</code></td></tr>
+<tr><td>加一个 <code>/</code> 命令、快捷键、CLI flag</td><td>扩展</td><td><code>registerCommand/Shortcut/Flag</code></td></tr>
+<tr><td>拦截或改写工具调用、提示审批</td><td>扩展事件</td><td><code>pi.on("tool_call" | "tool_result")</code></td></tr>
+<tr><td>插入项目特定规则、裁剪工具集</td><td>扩展事件</td><td><code>before_agent_start</code> + context 文件</td></tr>
+<tr><td>让工具只对脚本可见 / 大规模工具集按需加载</td><td>扩展 + 暴露级别</td><td><code>exposure</code> + <code>prepareLoadout</code></td></tr>
+<tr><td>把 Pi 嵌进自己的 Node 服务</td><td>SDK</td><td><code>createAgentSession()</code></td></tr>
+<tr><td>用自己的存储 / 设置 / 资源发现</td><td>SDK 边界注入</td><td><code>sessionManager</code> / <code>settingsManager</code> / <code>resourceLoader</code></td></tr>
+<tr><td>非 Node 语言驱动，或要进程隔离</td><td>RPC / JSON 模式</td><td><code>pi --mode rpc</code></td></tr>
+<tr><td>接内网私有模型 / 兼容端点</td><td>pi-ai 自定义 Provider</td><td><code>createProvider()</code> + compat 声明</td></tr>
+<tr><td>让工具在远端机器上跑</td><td>durable + pi-env</td><td><code>RemoteExecutionEnv</code></td></tr>
+<tr><td>多前端观察同一会话 / 崩溃恢复</td><td>durable + server/client</td><td><code>Harness.open()</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>13.2 Recipe 1：带结构化输出的工具扩展</h3>
+<div class="codewrap">
+  <div class="codehead"><span>~/.pi/agent/extensions/ticket.ts</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">import type</span> { ExtensionAPI } <span class="c-kw">from</span> <span class="c-str">"@earendil-works/pi-coding-agent"</span>;
+<span class="c-kw">import</span> { Type } <span class="c-kw">from</span> <span class="c-str">"typebox"</span>;
+
+<span class="c-kw">export default function</span> (pi: ExtensionAPI) {
+  pi.registerTool({
+    name: <span class="c-str">"list_tickets"</span>,
+    label: <span class="c-str">"List tickets"</span>,
+    description: <span class="c-str">"List open tickets from the internal tracker. Use when the user mentions a ticket id or asks about open work."</span>,
+    parameters: Type.Object({
+      status: Type.Optional(Type.Union([Type.Literal(<span class="c-str">"open"</span>), Type.Literal(<span class="c-str">"closed"</span>)])),
+      limit:  Type.Optional(Type.Number({ default: 20 })),
+    }),
+    <span class="c-cm">// 声明了 outputSchema，codemode 脚本就能拿到结构化值</span>
+    outputSchema: Type.Array(Type.Object({ id: Type.String(), title: Type.String() })),
+    annotations: { readOnlyHint: <span class="c-kw">true</span> },
+    <span class="c-kw">async</span> execute(_id, params, signal) {
+      <span class="c-kw">const</span> rows = <span class="c-kw">await</span> fetchTickets(params, signal);   <span class="c-cm">// 失败就 throw，不要返回错误文本</span>
+      <span class="c-kw">return</span> {
+        content: [{ type: <span class="c-str">"text"</span>, text: rows.map(r =&gt; <span class="c-str">`${r.id} ${r.title}`</span>).join(<span class="c-str">"\n"</span>) }],
+        structuredContent: rows,
+        details: { count: rows.length },   <span class="c-cm">// 跟活动分支走的状态放这里</span>
+      };
+    },
+  });
+}</pre>
+</div>
+<p class="small">要点回颖：<b>description 要写清「做什么 + 什么时候用」</b>（它直接决定模型何时选这个工具）；带 schema 的工具脚本可拿结构化值；只读工具声明 <code>readOnlyHint</code> 以免被审批网关拦截。</p>
+
+<h3>13.3 Recipe 2：用 SDK 嵌入到自己的服务</h3>
+<div class="codewrap">
+  <div class="codehead"><span>嵌入 + 替换服务 + 内联扩展</span><span class="lang">typescript</span><button class="copy">复制</button></div>
+<pre><span class="c-kw">import</span> {
+  createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager,
+} <span class="c-kw">from</span> <span class="c-str">"@earendil-works/pi-coding-agent"</span>;
+
+<span class="c-kw">const</span> { session } = <span class="c-kw">await</span> createAgentSession({
+  cwd: <span class="c-str">"/srv/workspace"</span>,
+  sessionManager: SessionManager.inMemory(),              <span class="c-cm">// 不想落盘会话文件</span>
+  settingsManager: <span class="c-kw">await</span> SettingsManager.create({ <span class="c-cm">/* 内存或文件 */</span> }),
+  resourceLoader: <span class="c-kw">new</span> <span class="c-ty">DefaultResourceLoader</span>({
+    extensionFactories: [inlineMyExtension],               <span class="c-cm">// 内联扩展，无需磁盘文件</span>
+    additionalExtensionPaths: [<span class="c-str">"builtin:codemode"</span>],   <span class="c-cm">// 显式加载内置扩展</span>
+  }),
+  tools: [<span class="c-str">"read"</span>, <span class="c-str">"grep"</span>, <span class="c-str">"edit"</span>],                    <span class="c-cm">// 最小权限：默认不给 bash</span>
+});
+
+session.subscribe(evt =&gt; myEventSink(evt));
+<span class="c-kw">await</span> session.prompt(<span class="c-str">"Summarize the repo"</span>);
+session.dispose();   <span class="c-cm">// 中止进行中的工作、失效扩展上下文、解绑监听</span></pre>
+</div>
+<div class="warn">
+  <span class="t">两个必踩的坑</span>
+  <b>1)</b> SDK 会话不会自动带 CLI 的三个内置扩展（codemode / tool_search / MCP）——需要手动加进 <code>extensionFactories</code>，且 MCP 扩展要配合 <code>session.bindExtensions()</code>。<br>
+  <b>2)</b> 会话已经流式运行时再调 <code>prompt()</code>，<b>必须</b>明确是 <code>steer</code> 还是 <code>followUp</code>，否则直接 reject（不猜）。
+</div>
+
+<h3>13.4 Recipe 3：权限网关（最小可用版）</h3>
+<p>组合三件事：<code>tool_call</code> 钩子 + 工具注解 + <code>ctx.ui.confirm</code>。完整代码见 <a href="#s5-4">5.4 节</a>。生产环境建议再加三条：<b>路径白名单</b>（拒绝工作目录外的读写）、<b>命令前缀黑名单</b>（<code>rm -rf</code>、<code>git push --force</code>等）、<b>审计落盘</b>（用 <code>afterToolCall</code> 写外部日志，或 <code>pi.appendEntry()</code> 写入不进上下文的会话条目）。
+</p>
+
+<h3>13.5 Recipe 4：接入内网/私有模型</h3>
+<ol>
+  <li>优先走 <b>OpenAI 兼容 / Anthropic 兼容</b> 配置（<code>compat</code> 声明 baseURL、认证头、参数差异）</li>
+  <li>把模型的 <code>inputLimits</code>（上下文窗口）和 <code>promptCache</code> 生命周期<b>显式声明</b>——否则压缩阈值与保温策略会失准</li>
+  <li>用 <code>samplingParamsByThinkingLevel</code> 把 7 档推理等级映射到你的模型参数；不支持的档位会被自动 clamp</li>
+  <li>模型必须支持工具调用，否则不应进入 chat catalog（这是 Pi 的硬约束）</li>
+  <li>校验可用 <code>--list-models &lt;搜索词&gt;</code> 与 <code>pi auth check</code></li>
+</ol>
+
+<h3>13.6 落地检查清单</h3>
+<div class="cards">
+  <div class="card"><div class="n">安全</div><h5>隔离与最小权限</h5><p>容器/专用账户跑；只挂载必要目录；凭据短期化；<code>--no-extensions</code> 做基线对照；审查每一个项目包。</p></div>
+  <div class="card"><div class="n">成本</div><h5>上下文与缓存</h5><p>敏感大输出用 codemode 过滤；关掉不必要的工具以缩短 prompt；开启 <code>cacheWarming</code> 并监控 <code>cacheRead</code> 占比；用 <code>/session</code> 看分模型成本。</p></div>
+  <div class="card"><div class="n">可靠</div><h5>可恢复性</h5><p>需要跳进程存活就用 durable；定期备份 <code>~/.pi/agent/sessions</code>；捕获 <code>agent_settled</code> 而非 <code>agent_end</code> 判断真正结束。</p></div>
+  <div class="card"><div class="n">可观测</div><h5>遥测与审计</h5><p>用 <code>pi-telemetry</code> 契约接自己的 OTel；在 <code>tool_call</code> / <code>agent_end</code> 写审计事件；开 <code>showCacheMissNotices</code> 排查性能回退。</p></div>
+  <div class="card"><div class="n">可维护</div><h5>升级策略</h5><p>锁 tag；实验包另行隔离；升级前跑 <code>npm run check</code> 与自建回归集；对 <code>models.generated.ts</code> 的变动做 diff 审阅。</p></div>
+  <div class="card"><div class="n">团队</div><h5>规范先行</h5><p>把 AGENTS.md 式的约束写进自己仓库：禁破坏性 git、强制精确依赖、测试用 faux provider、限定改动范围。</p></div>
+</div>
+
+<h3>13.7 常见坑汇总</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>坑</th><th>真相</th></tr></thead>
+<tbody>
+<tr><td>“我改了 <code>agent.state.messages</code> 但模型没变”</td><td>SessionManager 才权威；要改上下文得注入 entry 或用 <code>prepareRequest</code></td></tr>
+<tr><td>“工具为什么没被模型看到”</td><td>检查 <code>exposure</code> 与 <b>激活集</b>：非 direct/model-only 注册时不会激活</td></tr>
+<tr><td>“工具删不掉”</td><td>工具无法注销，只能用 <code>exposure: "hidden"</code> 重新注册以撤回</td></tr>
+<tr><td>“并行工具时状态乱了”</td><td>同一 assistant 消息的工具可能并发；共享可变状态的工具要声明 <code>executionMode: "sequential"</code></td></tr>
+<tr><td>“扩展里起了个 server 结果有时候没启动”</td><td>有些调用会加载扩展但不开会话；资源要从 <code>session_start</code> 起、在 <code>session_shutdown</code> 幂等清理</td></tr>
+<tr><td>“对话结束回调触发太早”</td><td><code>agent_end</code> 之后还可能有重试/压缩/队列；用 <code>agent_settled</code></td></tr>
+<tr><td>“自定义消息被发送到模型了”</td><td><code>convertToLlm</code> 里忘了过滤自定义角色</td></tr>
+<tr><td>“降了工具就报错”</td><td>参数校验在 preflight 阶段就会拒绝；并行批次里任一步骤失败都会转成 <code>isError</code> 的工具结果</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ==================== 附录 ==================== -->
+<h2 id="appendix"><span class="num">A</span>附录 A：关键文件索引</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>路径</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td><code>packages/agent/src/agent-loop.ts</code></td><td>949 行，Agent 循环本体（事件、turn、工具批、队列）</td></tr>
+<tr><td><code>packages/agent/src/agent.ts</code></td><td>613 行，有状态的 <code>Agent</code> 类（订阅、状态屏障、会话 id）</td></tr>
+<tr><td><code>packages/agent/src/types.ts</code></td><td>539 行，<code>AgentTool</code> / <code>AgentEvent</code> / 钩子签名</td></tr>
+<tr><td><code>packages/ai/src/types.ts</code></td><td>893 行，消息、内容块、Usage、StopReason、Provider 抽象</td></tr>
+<tr><td><code>packages/ai/src/providers/all.ts</code></td><td><code>builtinProviders()</code>：42 个内置 Provider 的注册表</td></tr>
+<tr><td><code>packages/ai/scripts/generate-models.ts</code></td><td>模型目录生成器（严禁手改生成物）</td></tr>
+<tr><td><code>packages/coding-agent/src/core/system-prompt.ts</code></td><td>229 行，分节 prompt 组装与增量 diff</td></tr>
+<tr><td><code>packages/coding-agent/src/core/tools/truncate.ts</code></td><td>截断策略与默认限额</td></tr>
+<tr><td><code>packages/coding-agent/src/core/compaction/compaction.ts</code></td><td>切点选法与摘要生成</td></tr>
+<tr><td><code>packages/coding-agent/src/core/compaction/branch-summarization.ts</code></td><td>分支摘要（/tree 导航用）</td></tr>
+<tr><td><code>packages/coding-agent/src/core/session-manager.ts</code></td><td>JSONL 会话树与 entry 类型定义</td></tr>
+<tr><td><code>packages/coding-agent/src/core/extensions/types.ts</code></td><td><b>扩展 API 的权威类型声明</b>（所有事件/上下文/结果类型）</td></tr>
+<tr><td><code>packages/coding-agent/src/core/sdk.ts</code></td><td>SDK 工厂：<code>createAgentSession</code> 及工具工厂</td></tr>
+<tr><td><code>packages/coding-agent/src/core/agent-session.ts</code></td><td>会话编排层（消息、模型、工具、队列、压缩、扩展运行时）</td></tr>
+<tr><td><code>packages/coding-agent/src/extensions/codemode/</code></td><td>codemode 内置扩展（它自己也只是一个扩展）</td></tr>
+<tr><td><code>packages/coding-agent/docs/*.md</code></td><td>37 篇用户向文档（共 7,061 行），质量很高，建议当设计参考读</td></tr>
+<tr><td><code>packages/coding-agent/examples/</code></td><td>105 个可运行示例：extensions / sdk / plugins / rpc</td></tr>
+<tr><td><code>AGENTS.md</code></td><td>125 行开发规则（多 Agent 协作、依赖安全、Git 纪律）</td></tr>
+<tr><td><code>.pi/</code></td><td>Pi 自己的扩展/提示/技能（含 release 流程）</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="glossary"><span class="num">B</span>附录 B：术语表</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>术语</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><b>Transcript</b></td><td>会话的完整记录；system prompt 与工具声明的权威来源（以 system 消息形式存储，可增量 patch）</td></tr>
+<tr><td><b>Branch / 活动分支</b></td><td>会话树中从根到当前 leaf 的路径；决定下一次请求的历史</td></tr>
+<tr><td><b>Projection（投影）</b></td><td>从完整会话树推导出的「模型实际看到的消息序列」（应用了压缩与 context_edit）</td></tr>
+<tr><td><b>Loadout</b></td><td>当前向模型声明的工具集（激活集）</td></tr>
+<tr><td><b>Exposure</b></td><td>工具的可见级别（direct / model-only / codemode / deferred / hidden）</td></tr>
+<tr><td><b>Turn</b></td><td>一次 LLM 调用 + 其触发的工具执行</td></tr>
+<tr><td><b>Compaction</b></td><td>把旧消息摘要为一条 entry 以释放上下文</td></tr>
+<tr><td><b>Branch Summary</b></td><td>分支导航时对离开路径的摘要注入</td></tr>
+<tr><td><b>Steering / Follow-up</b></td><td>运行中打断（本轮工具结束后生效）/ 运完后续跑（无工具无 steering 时检查）</td></tr>
+<tr><td><b>Codemode</b></td><td>模型写 JS 在 QuickJS 沙箱调工具，中间结果不进上下文</td></tr>
+<tr><td><b>Virtual Model</b></td><td>可选择但每次请求自行路由到物理模型的“虚拟”模型</td></tr>
+<tr><td><b>Durable</b></td><td>先提交后展示的持久化 harness，进程挂掉可恢复</td></tr>
+<tr><td><b>Chord</b></td><td>Pi 内部使用的应用组合运行时（facets / services / 复制状态），本身不属于 Pi</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="method"><span class="num">C</span>附录 C：调研方法与局限</h2>
+<div class="two">
+  <div>
+    <h4>方法</h4>
+    <ul>
+      <li>从 <code>github.com/earendil-works/pi</code> 完整克隆（<code>git fetch --unshallow</code>），分析基线 <code>ea448f4</code>（2026-10-10，main）</li>
+      <li>阅读范围：37 篇 coding-agent 文档、14 个包的 README、关键源码（agent-loop / types / system-prompt / tools / compaction / session-manager / extensions）</li>
+      <li>规模与活跃度数据均由脚本直接从仓库统计得出（带行数、文件数、提交数、作者分布）</li>
+      <li>官方文档表述与源码实现做了交叉核对；本文引用的事件名、常量值、API 名均可在上述文件里直接检索到</li>
+    </ul>
+  </div>
+  <div>
+    <h4>局限（请自行验证）</h4>
+    <ul>
+      <li><b>未做端到端运行</b>：未使用真实 API key 跑通流程，因此性能、延迟、实际 token 消耗均无实测数据</li>
+      <li><b>未全量阅读 18 万行</b>：durable / chord / tui 等包为文档 + 结构级理解，实现细节未逐行核对</li>
+      <li><b>未做基准对比</b>：与同类方案的对比表基于公开认知，不是同口径实测</li>
+      <li><b>仓库处于高速变化期</b>：结论有时效性，请以你锁定版本的源码为准</li>
+    </ul>
+  </div>
+</div>
+
+<footer class="end">
+  <p><b>Pi Agent 框架深度调研报告</b> · 基线 commit <code>ea448f4</code> · 版本 <code>v1.1.0</code> · MIT</p>
+  <p class="small">报告由源码与官方文档整理而成；数据统计脚本基于完整 git 历史。项目内引用均为原文或忠实改写，代码片段为便于阅读做了删减与注释补充。</p>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 阅读进度条 ---------- */
+  var bar = document.getElementById("progress");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- 代码块复制 ---------- */
+  document.querySelectorAll(".codewrap").forEach(function (wrap) {
+    var btn = wrap.querySelector(".copy");
+    var pre = wrap.querySelector("pre");
+    if (!btn || !pre) return;
+    btn.addEventListener("click", function () {
+      var text = pre.textContent || "";
+      var done = function () {
+        var old = btn.textContent;
+        btn.textContent = "已复制";
+        setTimeout(function () { btn.textContent = old; }, 1200);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(text, done); });
+      } else {
+        fallback(text, done);
+      }
+    });
+  });
+  function fallback(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
+  }
+
+  /* ---------- 侧边栏目录高亮 ---------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll("nav.toc a"));
+  var targets = links
+    .map(function (a) { return document.querySelector(a.getAttribute("href")); })
+    .filter(Boolean);
+  if ("IntersectionObserver" in window && targets.length) {
+    var visible = new Map();
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) visible.set(e.target.id, e.intersectionRatio);
+        else visible.delete(e.target.id);
+      });
+      var bestId = null, bestRatio = -1;
+      visible.forEach(function (ratio, id) {
+        if (ratio > bestRatio) { bestRatio = ratio; bestId = id; }
+      });
+      if (!bestId) {
+        /* 没有可见区段时，取最后一个已经越过的标题 */
+        var y = window.scrollY + 120, cur = null;
+        targets.forEach(function (t) { if (t.offsetTop <= y) cur = t.id; });
+        bestId = cur;
+      }
+      links.forEach(function (a) {
+        a.classList.toggle("active", bestId !== null && a.getAttribute("href") === "#" + bestId);
+      });
+    }, { rootMargin: "-84px 0px -68% 0px", threshold: [0, 0.05, 0.25, 0.5, 1] });
+    targets.forEach(function (t) { io.observe(t); });
+  }
+})();
+</script>
+</body>
+</html>
