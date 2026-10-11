@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Agent 框架速览 | 5 分钟读懂</title>
+<meta name="description" content="Pi（earendil-works/pi）Agent 框架精简版调研：一句话结论、核心数据、五个关键设计、风险清单与选型建议。">
+<style>
+:root{
+  --bg:#0a0e13;--panel:#111923;--panel-2:#151f2b;--line:#1e2b39;--line-2:#27384a;
+  --fg:#dde7f2;--fg-2:#b6c4d4;--muted:#7d8fa3;--accent:#4cc2ff;--accent-dim:#1b3a52;
+  --green:#6ee7a0;--amber:#f5b657;--red:#ff7a7a;--purple:#bb9af7;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Segoe UI",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  --radius:10px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15.5px;line-height:1.78;
+  background-image:radial-gradient(1100px 520px at 84% -10%,rgba(76,194,255,.09),transparent 60%);background-attachment:fixed}
+.wrap{display:flex;max-width:1420px;margin:0 auto}
+nav{position:sticky;top:0;flex:0 0 216px;height:100vh;overflow-y:auto;padding:26px 12px 40px 20px;
+  border-right:1px solid var(--line);background:rgba(10,14,19,.72);backdrop-filter:blur(10px)}
+nav .brand{font-size:12.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+nav .brand b{color:var(--accent)}
+nav a{display:block;color:var(--fg-2);text-decoration:none;font-size:13.4px;padding:5px 10px;border-radius:7px;border-left:2px solid transparent}
+nav a:hover{background:var(--panel);color:#fff}
+nav a.on{background:linear-gradient(90deg,var(--accent-dim),transparent);color:#fff;border-left-color:var(--accent)}
+nav .sep{margin:13px 0;border-top:1px solid var(--line)}
+nav .go{font-size:12.6px;color:var(--purple)}
+main{flex:1;min-width:0;padding:0 44px 120px}
+@media(max-width:980px){nav{display:none}main{padding:0 18px 90px}}
+
+header{padding:66px 0 34px;border-bottom:1px solid var(--line);margin-bottom:40px}
+.eyebrow{font-size:12.5px;letter-spacing:.17em;text-transform:uppercase;color:var(--accent);margin-bottom:16px}
+h1{font-size:clamp(28px,4vw,44px);line-height:1.16;margin:0 0 14px;letter-spacing:-.02em}
+h1 .g{background:linear-gradient(92deg,var(--accent),var(--purple) 72%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:17px;color:var(--fg-2);max-width:70ch;margin:0}
+h2{font-size:23px;margin:58px 0 8px;padding-top:10px;border-top:1px solid var(--line);scroll-margin-top:16px}
+h2:first-of-type{border-top:0}
+h2 .num{font-family:var(--mono);font-size:14px;color:var(--accent);margin-right:10px}
+h3{font-size:17.5px;margin:30px 0 8px;color:#fff;scroll-margin-top:16px}
+h3::before{content:"▍";color:var(--accent);margin-right:7px;font-size:14px}
+p{margin:9px 0}
+a{color:var(--accent);text-decoration:none;border-bottom:1px dotted rgba(76,194,255,.4)}
+a:hover{border-bottom-style:solid}
+strong{color:#fff}
+code{font-family:var(--mono);font-size:.87em;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:#cfe6ff}
+ul,ol{padding-left:22px}
+li{margin:4px 0}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.stat .k{font-size:11.4px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.stat .v{font-family:var(--mono);font-size:19px;color:var(--fg);line-height:1.3}
+.stat .v small{font-family:var(--sans);font-size:12px;color:var(--muted)}
+
+table{width:100%;border-collapse:collapse;font-size:13.6px;margin:16px 0}
+th{background:var(--panel);text-align:left;padding:9px 12px;color:#fff;border-bottom:1px solid var(--line-2);font-size:12.6px;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--fg-2);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:rgba(76,194,255,.05)}
+.wrapx{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius)}
+
+.note,.warn,.ok{margin:16px 0;padding:12px 15px;border-radius:0 var(--radius) var(--radius) 0;border-left:3px solid var(--accent);
+  background:linear-gradient(90deg,rgba(76,194,255,.08),rgba(76,194,255,.015));font-size:14.3px;color:var(--fg-2)}
+.warn{border-left-color:var(--amber);background:linear-gradient(90deg,rgba(245,182,87,.09),rgba(245,182,87,.015))}
+.ok{border-left-color:var(--green);background:linear-gradient(90deg,rgba(110,231,160,.085),rgba(110,231,160,.015))}
+.note b.t,.warn b.t,.ok b.t{display:block;color:#fff;font-size:12.3px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.warn b.t{color:var(--amber)}.ok b.t{color:var(--green)}
+
+.keys{display:grid;gap:12px;margin:20px 0}
+.key{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 var(--radius) var(--radius) 0;padding:14px 16px}
+.key h4{margin:0 0 6px;font-size:15.6px;color:#fff}
+.key .src{font-family:var(--mono);font-size:11.6px;color:var(--muted);margin-top:8px;display:block}
+.key p{margin:0;font-size:14.2px;color:var(--fg-2)}
+
+.arch{border:1px solid var(--line);border-radius:var(--radius);padding:14px;background:linear-gradient(180deg,#0e141b,#080c11);margin:18px 0;font-size:13px}
+.row{display:flex;gap:10px;align-items:center;margin:7px 0}
+.row .tag{flex:0 0 92px;text-align:center;font-family:var(--mono);font-size:11.4px;color:var(--muted);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:6px 4px}
+.row .cells{flex:1;display:flex;gap:8px;flex-wrap:wrap}
+.cell{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:12.8px;color:var(--fg-2)}
+.cell b{color:#fff}
+.cell.hi{border-color:var(--accent);color:#dff1ff;background:linear-gradient(160deg,rgba(76,194,255,.12),var(--panel))}
+
+pre{margin:14px 0;border:1px solid var(--line);border-radius:var(--radius);background:#080c11;padding:14px 15px;overflow-x:auto;
+  font-family:var(--mono);font-size:12.5px;line-height:1.66;color:#d3e2f2}
+.cm{color:#5f7288;font-style:italic}
+.tagline{font-size:20px;line-height:1.5;color:#fff;border-left:3px solid var(--purple);padding:4px 0 4px 16px;margin:22px 0;font-style:italic}
+.small{font-size:13px;color:var(--muted)}
+footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+.pill{display:inline-block;font-family:var(--mono);font-size:11.4px;padding:1px 8px;border-radius:20px;border:1px solid var(--line-2);background:var(--panel-2);color:var(--muted);margin-right:5px}
+.pill.g{border-color:rgba(110,231,160,.4);color:var(--green)}
+.pill.a{border-color:rgba(245,182,87,.4);color:var(--amber)}
+.pill.r{border-color:rgba(255,122,122,.4);color:var(--red)}
+@media print{body{background:#fff;color:#111}nav{display:none}main{padding:0}h1 .g{color:#111;-webkit-text-fill-color:#111}
+  .key,.cell,.stat,.arch,pre{background:#fafafa;border-color:#ccc}a{color:#0a58ca}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <div class="brand">Pi · <b>速览</b></div>
+  <a href="#verdict">一句话结论</a>
+  <a href="#data">核心数据</a>
+  <a href="#arch">架构一张图</a>
+  <a href="#keys">五个关键设计</a>
+  <a href="#pkg">包地图</a>
+  <a href="#risk">风险清单</a>
+  <a href="#choose">选型建议</a>
+  <div class="sep"></div>
+  <a class="go" href="index.html">→ 完整版报告（17 章）</a>
+</nav>
+
+<main>
+<header>
+  <div class="eyebrow">精简版 · 5 分钟读完 · 2026-10</div>
+  <h1>Pi Agent 框架 <span class="g">速览</span></h1>
+  <p class="lede">面向 Agent 开发工程师。基于 <code>earendil-works/pi</code> 源码、官方文档与完整 git 历史的提炼版，只回答三个问题：<b>它是什么、值不值得用、有哪些坑</b>。</p>
+</header>
+
+<h2 id="verdict"><span class="num">01</span>一句话结论</h2>
+<div class="tagline">“There are many agent harnesses but this one is yours.”<br><span class="small" style="font-style:normal">—— pi.dev 官方 slogan</span></div>
+
+<p><b>Pi 是一个刻意做减法的 Agent harness：内核极小、扩展点极多、上下文极省。</b>它的定位不是「多 Agent 编排平台」，而是<b>可以被你改造成任何样子的底座</b>。</p>
+
+<div class="note">
+  <b class="t">30 秒版本</b>
+  14 个 TypeScript 包、18 万行源码，但真正的 Agent 循环只有 <b>949 行</b>；复杂度全部花在「工具如何暴露给模型」「上下文如何回收」「能力如何插进来」这三个真问题上。
+  如果你要做<b>可嵌入、可扩展、成本可控</b>的编码/终端 Agent，它值得认真评估；如果你要开箱即用的 SaaS 或多 Agent 编排，它不是答案。
+</div>
+
+<h2 id="data"><span class="num">02</span>核心数据</h2>
+<div class="grid">
+  <div class="stat"><div class="k">GitHub Stars</div><div class="v">114,152</div></div>
+  <div class="stat"><div class="k">Forks</div><div class="v">14,510</div></div>
+  <div class="stat"><div class="k">贡献者</div><div class="v">299</div></div>
+  <div class="stat"><div class="k">累计提交</div><div class="v">6,839</div></div>
+  <div class="stat"><div class="k">源码规模</div><div class="v">18.1<small> 万行 TS</small></div></div>
+  <div class="stat"><div class="k">测试规模</div><div class="v">19.2<small> 万行 / 736 文件</small></div></div>
+  <div class="stat"><div class="k">最新版本</div><div class="v">v1.1.0</div></div>
+  <div class="stat"><div class="k">许可 · 运行时</div><div class="v"><small>MIT · Node ≥ 22.19</small></div></div>
+</div>
+
+<div class="wrapx">
+<table>
+<thead><tr><th>时间线</th><th>事件</th></tr></thead>
+<tbody>
+<tr><td>2025-08-09</td><td>首个提交（monorepo + npm workspaces 初始化）</td></tr>
+<tr><td>2026-01</td><td>单月 1,224 commits，开发峰值</td></tr>
+<tr><td>2026-10-01</td><td><code>v1.0.0</code> 正式发布（同时发布 Pi Durable）</td></tr>
+<tr><td>2026-10-03 → 10-07</td><td><code>v1.0.1</code> → <code>v1.1.0</code> 连发 5 个版本</td></tr>
+<tr><td>2026-10-10</td><td>本次调研基线 <code>ea448f4</code>（main）</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="warn">
+  <b class="t">活跃度的两面</b>
+  一面是<b>极高迭代速度</b>（近 30 天 498 commits，约 16 次/天，302 个 tag）；另一面是<b>尚未稳定</b>——提交构成里 <code>fix</code> 占多数，且 6 个包（durable / server / client / protocol / env / evals）README 明确标注 <i>experimental，API 可能随时变更</i>。<b>用就锁 tag，别追 main。</b>
+</div>
+
+<h2 id="arch"><span class="num">03</span>架构一张图</h2>
+<p>依赖方向自上而下。关键点：<b>下层不认识上层</b>，所以模型层与循环层可以被单独复用（<code>chord</code> 是唯一例外——它不属于 Pi，零 Pi 依赖）。</p>
+
+<div class="arch">
+  <div class="row"><div class="tag">L4 应用</div><div class="cells">
+    <div class="cell hi"><b>pi-coding-agent</b> CLI + 工具 + 会话 + 扩展</div>
+    <div class="cell hi"><b>pi-durable</b> 崩溃安全 harness</div>
+    <div class="cell hi"><b>server/client</b> 远程会话</div>
+  </div></div>
+  <div class="row"><div class="tag">L3 会话</div><div class="cells">
+    <div class="cell">SessionManager（JSONL 树）</div>
+    <div class="cell">Compaction（压缩/分支摘要）</div>
+    <div class="cell">Extension Runtime</div>
+    <div class="cell">Settings / ModelRuntime / 凭据</div>
+  </div></div>
+  <div class="row"><div class="tag">L2 循环</div><div class="cells">
+    <div class="cell hi"><b>pi-agent-core</b> 949 行循环：turn、工具批、队列、事件</div>
+  </div></div>
+  <div class="row"><div class="tag">L1 模型</div><div class="cells">
+    <div class="cell hi"><b>pi-ai</b> 42 个内置 Provider、流式事件、用量与成本</div>
+  </div></div>
+  <div class="row"><div class="tag">L0 支撑</div><div class="cells">
+    <div class="cell">pi-tui（差分渲染）</div><div class="cell">pi-codemode（QuickJS 沙箱）</div>
+    <div class="cell">pi-mcp（自研 MCP 客户端）</div><div class="cell">pi-env（SSH 远程执行）</div>
+    <div class="cell">pi-protocol（CBOR 分帧）</div><div class="cell">pi-telemetry</div>
+  </div></div>
+</div>
+
+<h2 id="keys"><span class="num">04</span>五个关键设计（真正的价值所在）</h2>
+<p class="small">这五条是自研 Agent 时最容易踩坑、也最值得直接抄的部分。</p>
+
+<div class="keys">
+  <div class="key">
+    <h4>1. Transcript 是唯一权威</h4>
+    <p>会话记录拥有 system prompt 与工具声明；<code>SessionManager</code> 拥有模型上下文。<b>给 <code>session.agent.state.messages</code> 赋值不会改变持久化上下文</b>——想注入历史必须构造带 entry 的 manager，或用 <code>prepareRequest</code>。这一条直接消灭「UI 看到的上下文 ≠ 模型看到的上下文」这类最难查的 bug。</p>
+    <span class="src">packages/agent/README.md · docs/sdk.md</span>
+  </div>
+  <div class="key">
+    <h4>2. 工具的五级暴露模型</h4>
+    <p>把「是否向模型声明」和「是否可被其它工具调用」拆成两个维度：<code>direct</code>（默认）/ <code>model-only</code> / <code>codemode</code> / <code>deferred</code> / <code>hidden</code>。MCP 时代工具数量爆炸时，这比「全量塞 schema」省下大量 token；配合 <code>prepareLoadout()</code>，编排型工具可以自己决定模型看到什么。</p>
+    <span class="src">docs/extensions.md · src/core/extensions/types.ts</span>
+  </div>
+  <div class="key">
+    <h4>3. 事件驱动 + 三个明确的 turn 钩子</h4>
+    <p>8 种事件顺序固定；每轮请求的生命周期是 <code>prepareRequest → 模型 → 工具 → finishTurn → turn_end</code>。<code>beforeToolCall</code> 可阻止调用、<code>afterToolCall</code> 可改写结果、<code>finishTurn</code> 决定续跑还是收尾。并行工具执行时<b>事件按完成顺序、落盘按源码顺序</b>——顺序语义被显式定义，不靠默契。</p>
+    <span class="src">packages/agent/src/agent-loop.ts（949 行）</span>
+  </div>
+  <div class="key">
+    <h4>4. 生产级的上下文回收</h4>
+    <p>压缩阈值 <code>contextWindow − 16384</code>、保留最近 <code>20000</code> token；<b>切点绝不落在 tool result 上</b>；重复压缩会回退到上次保留边界，避免无声丢历史；长用户消息拆成两份摘要合并。切分支时还会自动生成<b>分支摘要</b>注入新路径——「试错换路线」不再等于丢掉全部上下文。</p>
+    <span class="src">src/core/compaction/{compaction,branch-summarization}.ts</span>
+  </div>
+  <div class="key">
+    <h4>5. Codemode：把编排下沉到沙箱</h4>
+    <p>模型写一段 JS，在 QuickJS(WASM) 里调用工具，<b>中间结果完全不进上下文</b>，只回传脚本输出。「列 200 个文件 → 过滤 → 只读 3 个」这类流程的 token 成本从 O(n) 降到 O(1)。更关键的是：<b>codemode 自己就是一个普通扩展</b>，只用了 <code>exposure</code> + <code>prepareLoadout</code> + <code>ctx.executeTool()</code> 三样公开 API，没有特权接口。</p>
+    <span class="src">packages/codemode（QuickJS）· src/extensions/codemode/</span>
+  </div>
+</div>
+
+<div class="ok">
+  <b class="t">顺带一提：上下文是它最在意的东西</b>
+  技能（Skills）启动时只注入 name/description/path，全文按需加载；工具结果统一 2000 行 / 50KB 截断并<b>告知模型完整输出在哪</b>；模型目录只收录支持工具调用的模型；缓存命中/未命中可观测，还支持空闲期 prompt-cache 保温（<code>cacheWarming: off|streaming|idle</code>）。
+</div>
+
+<h2 id="pkg"><span class="num">05</span>包地图：分三圈看</h2>
+<div class="wrapx">
+<table>
+<thead><tr><th>圈层</th><th>包</th><th>规模</th><th>建议</th></tr></thead>
+<tbody>
+<tr><td rowspan="2"><b>内核圈</b><br><span class="pill g">稳定</span></td>
+    <td><code>pi-ai</code> — 统一 LLM API、42 个 Provider、用量/成本/缓存</td><td>2.7 万行</td><td rowspan="2">可直接复用，甚至只取这两个包做自己的 agent</td></tr>
+<tr><td><code>pi-agent-core</code> — 循环、状态、事件、工具执行</td><td>0.25 万行</td></tr>
+<tr><td rowspan="2"><b>应用圈</b><br><span class="pill a">主力</span></td>
+    <td><code>pi-coding-agent</code> — CLI、内置工具、会话树、扩展、四种模式</td><td>8.6 万行</td><td rowspan="2">改动主要发生在这里；扩展与 SDK 都从此入口</td></tr>
+<tr><td><code>pi-tui</code> — 差分渲染终端框架（CSI 2026 同步输出）</td><td>2.0 万行</td></tr>
+<tr><td rowspan="5"><b>前沿圈</b><br><span class="pill r">实验性</span></td>
+    <td><code>pi-durable</code> — 先提交后展示，进程挂掉可恢复</td><td>2.2 万行</td><td rowspan="5">有明确需求再用；锁版本、包适配层</td></tr>
+<tr><td><code>pi-codemode</code> — QuickJS 沙箱</td><td>0.26 万行</td></tr>
+<tr><td><code>pi-mcp</code> — 自研 MCP 客户端（不依赖官方 SDK）</td><td>0.32 万行</td></tr>
+<tr><td><code>pi-env</code> — Rust daemon + SSH 远程执行</td><td>0.21 万行</td></tr>
+<tr><td><code>server / client / protocol</code> — CBOR 路由协议（v8，无兼容保证）</td><td>0.4 万行</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="risk"><span class="num">06</span>风险清单</h2>
+<div class="wrapx">
+<table>
+<thead><tr><th>风险</th><th>真相</th><th>程度</th><th>怎么应对</th></tr></thead>
+<tbody>
+<tr><td><b>没有内置沙箱</b></td>
+    <td>官方文档直说：工具使用 Pi 进程的 OS 权限，扩展与 Pi 同进程同权限；<b>项目信任不是安全边界</b>，它只管「要不要加载项目里的扩展」，不限制工具能碰什么</td>
+    <td><span class="pill r">高</span></td><td>容器 / VM / 专用低权限账户；凭据短期化；用 <code>pi-env</code> 只把工具隔离出去</td></tr>
+<tr><td><b>实验包无兼容保证</b></td>
+    <td>protocol 自述 “no compatibility guarantees”，durable/server/client/env 同样标注 experimental</td>
+    <td><span class="pill a">中高</span></td><td>锁 tag；协议层加适配器，别让业务直接依赖</td></tr>
+<tr><td><b>概念负载重</b></td>
+    <td>transcript 权威 + 分节 prompt + 暴露级别 + loadout + 投影/压缩 + 四种模式，理解成本不低</td>
+    <td><span class="pill a">中</span></td><td>从 SDK + 单个扩展切入，别一上手改内核</td></tr>
+<tr><td><b>模型目录依赖外部数据源</b></td>
+    <td>目录由 models.dev / OpenRouter / AI Gateway 聚合生成，原始数据不入库（构建时 hydrate）</td>
+    <td><span class="pill a">中</span></td><td><code>build:offline</code>；内网手工声明 <code>modelOverrides</code> 的窗口与缓存策略</td></tr>
+<tr><td><b>会话明文</b></td>
+    <td>会话是明文 JSONL，可能含 prompt、命令输出、文件内容甚至泄露的凭据；<code>/export</code>、<code>/share</code> 会整包带走</td>
+    <td><span class="pill a">中</span></td><td>把会话目录当敏感数据管理；导出前审查</td></tr>
+<tr><td><b>Bus factor</b></td>
+    <td>6,839 次提交中 57% 来自单一作者（Mario Zechner）</td>
+    <td><span class="pill">中低</span></td><td>评估维护者结构与长期路线；关注企业/商业支持面</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="choose"><span class="num">07</span>选型建议</h2>
+<div class="wrapx">
+<table>
+<thead><tr><th>结论</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="pill g">适合</span></td>
+    <td>想做自己的编码/终端 Agent 产品；需要深度定制工具与上下文策略；有内网/合规要求要自托管 + 接私有模型；团队愿意花 1～2 周读源码</td></tr>
+<tr><td><span class="pill r">不适合</span></td>
+    <td>只想要开箱即用的 SaaS；需要内置多 Agent 编排图（Pi 有意不做）；需要厂商提供 SLA 与安全沙箱；不想碰 TypeScript</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>如果决定用，落地五步</h3>
+<ol>
+  <li><b>先跑通再读源码</b>：<code>pi</code> 交互模式 + <code>/login</code>，用真实任务感受工具集与会话行为。</li>
+  <li><b>从扩展起步，不动内核</b>：先写一个只读工具（<code>pi.registerTool()</code> + <code>readOnlyHint</code>），再逐步接权限网关（<code>tool_call</code> 钩子 + <code>ctx.ui.confirm</code>）。</li>
+  <li><b>按部署形态定安全边界</b>：容器化运行，挂载白名单目录，凭据最小化——不要指望 Pi 自己隔离。</li>
+  <li><b>上成本与缓存观测</b>：开启 <code>cacheWarming</code>、关注 <code>cacheRead</code> 占比、用 <code>/session</code> 看分模型成本；大输出优先走 codemode 而不是灌进上下文。</li>
+  <li><b>锁版本 + 建回归集</b>：锁定 tag，把实验包隔离，升级前跑自己的回归用例。</li>
+</ol>
+
+<div class="warn">
+  <b class="t">最容易踩的三个坑</b>
+  <b>①</b> 改了 <code>agent.state.messages</code> 却发现模型没变（权威在 SessionManager）。<br>
+  <b>②</b> 注册了工具但模型看不见（非 <code>direct</code>/<code>model-only</code> 的暴露级别注册时<b>不激活</b>）。<br>
+  <b>③</b> 用 <code>agent_end</code> 判断「跑完了」（之后还可能有重试/压缩/队列续跑，应该用 <code>agent_settled</code>）。
+</div>
+
+<h3>速查：想做 X，用哪一层</h3>
+<div class="wrapx">
+<table>
+<thead><tr><th>需求</th><th>入口</th></tr></thead>
+<tbody>
+<tr><td>加模型可调用的能力 / <code>/</code> 命令 / 快捷键</td><td>扩展：<code>registerTool</code> · <code>registerCommand</code> · <code>registerShortcut</code></td></tr>
+<tr><td>拦截工具调用、做审批与审计</td><td>扩展事件：<code>tool_call</code> / <code>tool_result</code> / <code>afterToolCall</code></td></tr>
+<tr><td>嵌进自己的 Node 服务</td><td>SDK：<code>createAgentSession()</code>（可替换 sessionManager / settingsManager / resourceLoader）</td></tr>
+<tr><td>非 Node 语言驱动，或要进程隔离</td><td><code>pi --mode rpc</code>（JSONL 命令 + 事件）</td></tr>
+<tr><td>接内网私有模型</td><td><code>pi-ai</code> 自定义 Provider + compat 声明（<b>必须声明 inputLimits 与 promptCache</b>）</td></tr>
+<tr><td>让工具跑在远端机器</td><td><code>pi-durable</code> + <code>pi-env</code>（<code>RemoteExecutionEnv</code>）</td></tr>
+</tbody>
+</table>
+</div>
+
+<footer>
+  <p><b>Pi Agent 框架速览</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜ <a href="index.html">查看完整版报告（17 章 · 含源码细节与迁移指南）</a></p>
+  <p class="small">数据来源：GitHub REST API（stars / forks / contributors）+ 本地完整 git 历史统计（提交数、作者分布、代码行数）+ 仓库源码与 37 篇官方文档。社区数据抓取于 2026-10-11。未做端到端运行与性能基准，结论请以你锁定的版本为准。</p>
+</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll("nav a[href^='#']"));
+  var secs=links.map(function(a){return document.querySelector(a.getAttribute("href"));}).filter(Boolean);
+  function upd(){
+    var y=window.scrollY+130,cur=null;
+    secs.forEach(function(s){if(s.offsetTop<=y)cur=s.id;});
+    links.forEach(function(a){a.classList.toggle("on",a.getAttribute("href")==="#"+cur);});
+  }
+  window.addEventListener("scroll",upd,{passive:true});upd();
+})();
+</script>
+</body>
+</html>
