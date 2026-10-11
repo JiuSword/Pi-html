@@ -109,7 +109,7 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
   <a href="#risk">风险清单</a>
   <a href="#choose">选型建议</a>
   <div class="sep"></div>
-  <a class="go" href="index.html">→ 25 分钟主报告</a>
+  <a class="go" href="index.html">→ 25–30 分钟主报告</a>
   <a class="go" href="full-report.html">→ 45 分钟完整版</a>
 </nav>
 
@@ -155,6 +155,18 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
 </tbody>
 </table>
 </div>
+
+<h3>实测：本报告自身的运行记录</h3>
+<p>本报告就是一次 pi 的真实端到端运行（真实 API key、真实工具执行）的产物，因此有下列一手数据：</p>
+<div class="grid">
+  <div class="stat"><div class="k">会话墙钟</div><div class="v">3.94<small> 小时 / 161 次 LLM 调用 / 153 次工具调用</small></div></div>
+  <div class="stat"><div class="k">缓存命中率</div><div class="v">99.29%</div></div>
+  <div class="stat"><div class="k">上下文 中位 / 峰值</div><div class="v">130K <small>/ 246K token</small></div></div>
+  <div class="stat"><div class="k">总成本</div><div class="v">$0.359</div></div>
+  <div class="stat"><div class="k">工具批延迟 p50 / p90</div><div class="v">0.34s <small>/ 4.92s</small></div></div>
+  <div class="stat"><div class="k">工具失败率（均自恢复）</div><div class="v">8.6%</div></div>
+</div>
+<p class="small">详情见 <a href="index.html">25–30 分钟主报告</a> 第 13 章：含成本结构图表与「若无缓存命中则成本 16×」的反推。</p>
 
 <div class="warn">
   <b class="t">活跃度的两面</b>
@@ -318,8 +330,8 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
 </div>
 
 <footer>
-  <p><b>Pi Agent 框架速览</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜ <a href="index.html">25 分钟主报告</a> · <a href="full-report.html">45 分钟完整版（17 章）</a></p>
-  <p class="small">数据来源：GitHub REST API（stars / forks / contributors）+ 本地完整 git 历史统计（提交数、作者分布、代码行数）+ 仓库源码与 37 篇官方文档。社区数据抓取于 2026-10-11。未做端到端运行与性能基准，结论请以你锁定的版本为准。</p>
+  <p><b>Pi Agent 框架速览</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜ <a href="index.html">25–30 分钟主报告</a> · <a href="full-report.html">45 分钟完整版（17 章）</a></p>
+  <p class="small">数据来源：GitHub REST API（stars / forks / contributors）+ 本地完整 git 历史统计（提交数、作者分布、代码行数）+ 仓库源码与 37 篇官方文档 + 本报告自身真实会话的逐条解析（token / 成本 / 延迟 / 错误率）。社区数据抓取于 2026-10-11。<b>N=1 单会话实测，不是性能基准</b>；结论请以你锁定版本的源码为准。</p>
 </footer>
 </main>
 </div>

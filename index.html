@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pi Agent 框架调研报告 | 25 分钟精读版</title>
+<title>Pi Agent 框架调研报告 | 25–30 分钟精读版</title>
 <meta name="description" content="Pi（earendil-works/pi）Agent 框架调研报告：核心架构图、关键代码、五个关键设计、上下文工程、codemode、风险与选型。面向 Agent 开发工程师。">
 <style>
 :root{
@@ -124,7 +124,7 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
 
 <nav>
   <div class="brand">Pi · <b>调研报告</b></div>
-  <div class="sub">25 分钟精读版 · 含 2 张架构图<br>基线 ea448f4 / v1.1.0</div>
+  <div class="sub">25–30 分钟精读版 · 含 3 张图表<br>基线 ea448f4 / v1.1.0</div>
   <a href="#s0">摘要 · 十条结论</a>
   <a href="#s1">1 项目定位与全景</a>
   <a href="#s2">2 核心架构</a>
@@ -148,6 +148,7 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
   <a href="#s10">10 工程实践借鉴</a>
   <a href="#s11">11 风险与选型</a>
   <a href="#s12">12 落地清单</a>
+  <a href="#s13">13 实测数据（真实运行）</a>
   <a href="#appendix">附录</a>
   <div class="sep"></div>
   <a class="go" href="brief.html">→ 6 分钟速览版</a>
@@ -156,7 +157,7 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
 
 <main>
 <header>
-  <div class="eyebrow"><span class="dot"></span>技术调研报告 · 25 分钟精读 · 2026-10</div>
+  <div class="eyebrow"><span class="dot"></span>技术调研报告 · 25–30 分钟精读 · 含实测数据 · 2026-10</div>
   <h1>Pi Agent 框架 <span class="g">调研报告</span></h1>
   <p class="lede">
     对 <code>github.com/earendil-works/pi</code> 的系统性调研：从统一模型层 <b>pi-ai</b>、Agent 循环 <b>pi-agent-core</b>，
@@ -1078,6 +1079,89 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 </div>
 
 <!-- ============ 附录 ============ -->
+<!-- ============ 13 ============ -->
+<h2 id="s13"><span class="num">13</span>实测数据：本报告自身的运行记录</h2>
+<p>前面 12 章都是「读源码 + 读文档」得出的判断。本章不同：它来自<b>本报告生成过程本身的真实运行记录</b>——一次完整使用真实 API key、真实工具执行的 pi 端到端会话（<code>deepseek/deepseek-flash</code>，reasoning <code>high</code>），任务就是把 Pi 仓库调研成这套三层 HTML 报告。所有数字均由会话 JSONL（328 条目 / 324 消息）逐条解析得出，<b>不是估算</b>。</p>
+
+<div class="ok">
+  <b class="t">一个额外的现场证据</b>
+  这次会话运行在 <b>pi-dashboard</b>（第三方整合）里，而不是 pi 自带的 TUI。同一套 agent 与 session 机制可以无修改地跑在别人的宿主程序里——这是第 9 章「可嵌入性」的一个真实样例，而不是文档里的承诺。
+</div>
+
+<div class="twrap">
+<table>
+<thead><tr><th>维度</th><th>指标</th><th>实测值</th></tr></thead>
+<tbody>
+<tr><td rowspan="4"><b>规模</b></td><td>会话墙钟时长</td><td class="num">3.94 小时（02:32 → 06:28 UTC）</td></tr>
+<tr><td>会话条目 / 消息</td><td>328 / 324</td></tr>
+<tr><td>LLM 调用次数</td><td>161</td></tr>
+<tr><td>工具调用次数</td><td>153</td></tr>
+<tr><td rowspan="3"><b>Token</b></td><td>新输入（未命中缓存）</td><td>131,736</td></tr>
+<tr><td>输出（含推理 41,651）</td><td>174,446（推理占 <b>23.9%</b>）</td></tr>
+<tr><td>缓存读取</td><td>18,384,512 &nbsp;→&nbsp; <b>缓存命中率 99.29%</b>（新输入仅占 0.71%）</td></tr>
+<tr><td rowspan="2"><b>上下文</b></td><td>每次请求上下文 token（中位 / 峰值）</td><td>130,256 / <b>246,225</b></td></tr>
+<tr><td>每条 assistant 消息平均输出</td><td>1,084 token</td></tr>
+<tr><td rowspan="3"><b>成本</b></td><td>总额</td><td><b>$0.359</b>（约 ¥2.6）</td></tr>
+<tr><td>结构（输出 / 缓存读 / 新输入）</td><td>58.3% / 30.7% / 11.0%</td></tr>
+<tr><td>单次 LLM 调用 / 单次工具调用</td><td>$0.0022 / $0.0024</td></tr>
+<tr><td rowspan="2"><b>延迟</b></td><td>工具批墙钟（p50 / p90 / max）</td><td>0.34 s / 4.92 s / 120.1 s</td></tr>
+<tr><td>用户提交 → 首个响应（p50 / p90）</td><td>3.0 s / 9.7 s</td></tr>
+<tr><td><b>工具分布</b></td><td>bash / read / edit / write / ask_user / canvas / browser</td><td>112 / 13 / 11 / 5 / 8 / 3 / 1</td></tr>
+<tr><td><b>可靠性</b></td><td>工具结果错误率（全部自恢复）</td><td><b>8.6%</b>（13 / 151）</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 900 232" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="成本结构对比">
+  <defs><style>
+    .cl{font:600 11.5px var(--sans);fill:#fff}
+    .cs{font:400 10.8px var(--mono);fill:#8b98a8}
+    .seg{stroke:#0a0e13;stroke-width:1}
+  </style></defs>
+  <text x="150" y="36" class="cl">实测总成本 $0.359</text>
+  <rect class="seg" x="150" y="46" width="77"  height="36" fill="#4cc2ff"/>
+  <rect class="seg" x="227" y="46" width="215" height="36" fill="#bb9af7"/>
+  <rect class="seg" x="442" y="46" width="408" height="36" fill="#6ee7a0"/>
+  <text x="188" y="70" class="cs" text-anchor="middle">11.0%</text>
+  <text x="334" y="70" class="cs" text-anchor="middle">30.7%</text>
+  <text x="646" y="70" class="cs" text-anchor="middle">58.3%（输出）</text>
+
+  <text x="150" y="124" class="cl">假设零缓存命中（全部输入按新输入单价重算）≈ $5.76（16×）</text>
+  <rect class="seg" x="150" y="134" width="11235" height="36" fill="#ff7a7a"/>
+  <text x="866" y="157" class="cs" text-anchor="end" style="fill:#ffd7d7">条形被裁切，实际长度约为上方的 16 倍 »</text>
+
+  <line x1="850" y1="40" x2="850" y2="188" stroke="#4cc2ff" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>
+  <text x="846" y="200" class="cs" text-anchor="end">▲ 实测条形的满长度参考线</text>
+  <text x="150" y="200" class="cs">反推单价：新输入 $0.30 / 1M　缓存读取 $0.006 / 1M（约 50× 价差）　输出 $1.20 / 1M</text>
+</svg>
+<div class="figcap">
+  <b>怎么读</b>：上方是本次会话的真实成本构成（同一比例尺）；下方是「假设全部输入都按新输入单价计费」的反推结果——同样的比例尺下它长到画不下。
+  本会话输入侧共 <b>18.52M token</b>，其中 99.29% 走了缓存，把输入侧成本从约 $5.55 压到 $0.150（<b>37×</b>），总成本从约 $5.76 降到 $0.359。<b>缓存不是优化项，是成本的决定项。</b>
+</div>
+</div>
+
+<h3>13.1 五条来自真实负载的结论</h3>
+<div class="twrap">
+<table>
+<thead><tr><th>结论</th><th>数据与含义</th></tr></thead>
+<tbody>
+<tr><td><b>1. 缓存命中率决定成本量级</b></td><td>99.29% 输入命中缓存，直接对应第 6 章的设计：分节 system prompt + 增量 patch（保证前缀稳定）、<code>cacheWarming</code> 保温、缓存命中可观测。<b>前缀一旦被扰动缓存就全丢</b>，所以这些设计不是可选项</td></tr>
+<tr><td><b>2. 瓶颈是人，不是工具</b></td><td>工具批 p50 仅 <b>0.34 s</b>、p90 4.92 s；而 3 次 <code>ask_user</code> 各等满 300 s 上限，合计 <b>15 分钟人类思考时间</b>。3.94 h 墙钟中，真正的机器工作不到 15 分钟</td></tr>
+<tr><td><b>3. 上下文真的会顶到天花板</b></td><td>每次请求中位携带 <b>13 万 token</b> 上下文，峰值 <b>24.6 万</b>。第 6 章的「window − 16384」阈值与「切点绝不落在 tool result」是真实负载下的必需品，不是理论细节</td></tr>
+<tr><td><b>4. 工具失败是常态，恢复能力才是关键</b></td><td>13 次失败（<b>8.6%</b>）覆盖 6 类原因：网络超时、GitHub HTTPS 不通、NVM 防火墙拦截、路径中文编码、<code>edit</code> 匹配不唯一、路径审批超时——<b>没有任何一次中断整个任务</b>。这就是「工具抛错 → <code>isError</code> 结果 → 模型换方案」回路的实际价值</td></tr>
+<tr><td><b>5. 成本量级参考</b></td><td>「完整源码调研 + 三层 HTML 报告 + 4 次 git 提交 + 1 次上游仓库完整克隆」全流程 <b>$0.359</b>；单次工具调用摊薄 $0.0024</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="warn">
+  <b class="t">本章数据的边界（勿当成基准）</b>
+  <b>N=1</b>：单模型、单任务类型、单机无并发，不反映吞吐或高并发表现；成本绝对值由 DeepSeek 的定价与缓存策略决定，换模型必须重新标定；延迟包含 pi-dashboard 与本地 Windows 环境的开销；
+  8.6% 的错误率来自一次「充满环境摩擦」的真实任务（网络受限、NVM 防火墙、路径审批），不代表稳态错误率。
+  它证明的是<b>「Pi 能跑通真实端到端任务」</b>，不是「Pi 的性能基准」。
+</div>
+
 <h2 id="appendix"><span class="num">A</span>附录</h2>
 <h3>A.1 关键文件索引</h3>
 <div class="twrap">
@@ -1101,12 +1185,12 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
 <h3>A.2 调研方法与局限</h3>
 <p><b>方法</b>：完整克隆仓库并 <code>git fetch --unshallow</code> 取得全历史，基线 <code>ea448f4</code>；阅读 37 篇官方文档、14 个包 README、关键源码（agent-loop / types / system-prompt / truncate / compaction / session-manager / extensions）；规模与活跃度数据由脚本直接从仓库统计；社区数据取自 GitHub REST API；官方文档表述与源码实现做了交叉核对。</p>
-<p><b>局限（请自行验证）</b>：① <b>未做端到端运行</b>，未使用真实 API key 跑通流程，因此性能、延迟、实际 token 消耗无实测数据；② 未全量阅读 18 万行，durable / chord / tui 等包为文档 + 结构级理解；③ 与同类方案的对比基于公开认知，不是同口径实测；④ 仓库处于高速变化期（近 30 天 498 commits），结论有时效性，请以你锁定版本的源码为准。</p>
+<p><b>局限（请自行验证）</b>：① <b>单会话实测样本</b>——第 13 章基于本报告自身的一次真实端到端运行（N=1，单模型单任务），有真实 token / 成本 / 延迟 / 错误率数据，但<b>不是基准测试</b>，无对照组、无并发与吞吐数据；② 未全量阅读 18 万行，durable / chord / tui 等包为文档 + 结构级理解；③ 与同类方案的对比基于公开认知，不是同口径实测；④ 仓库处于高速变化期（近 30 天 498 commits），结论有时效性，请以你锁定版本的源码为准。</p>
 
 <footer>
   <p><b>Pi Agent 框架调研报告</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜
      <a href="brief.html">6 分钟速览版</a> · <a href="full-report.html">45 分钟完整版（17 章 · 24 代码块）</a></p>
-  <p class="small">本文为「25 分钟精读版」：含 2 张核心架构图、10 段关键代码、12 章正文与 1 个附录。引用的事件名、常量值、API 名均可在上述源码文件中直接检索验证。</p>
+  <p class="small">本文为「25–30 分钟精读版」：正文约 5,300 字 + 15 张表格 + 17 段代码 + 3 张图表。第 13 章数据来自本报告自身的真实运行记录（328 条目逐条解析）。引用的事件名、常量值、API 名均可在源码中直接检索验证。</p>
 </footer>
 
 </main>
