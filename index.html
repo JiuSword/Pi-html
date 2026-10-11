@@ -967,8 +967,48 @@ diffSystemPromptSections(current, desired)
 </table>
 </div>
 
-<h3 id="s7-2">7.2 沙箱形态、脚本环境与限额</h3>
-<p>它提供三种沙箱，共享同一套 API 与结果格式：<code>CodemodeSandbox</code>（Node/Bun，<b>每次执行一个 worker thread</b>）、<code>RemoteCodemodeSandbox</code>（Cloudflare Workers / Durable Object，可远程执行）、<code>InlineCodemodeSandbox</code>（调用线程内，会阻塞调用方）。</p>
+<h3 id="s7-2">7.2 三种沙箱到底差在哪</h3>
+<p>先记住一句话：<b>三者的 API、脚本环境、结果格式完全一致，差别只有一个——VM 跑在哪个线程 / 哪个隔离环境里。</b>源码里说得很白：<code>CodemodeSandboxBase</code> 拿走工具表、默认值与在飞执行，子类<b>只负责传一个 <code>VmLauncher</code></b>（“Subclasses only choose where the VM runs”）。</p>
+
+<h4>为什么「VM 在哪」会成为一个问题</h4>
+<p>因为 <b>QuickJS 是同步执行的</b>：脚本在<b>计算</b>的时候（而不是在 <code>await</code> 工具的时候）会一直占着线程。所以真正的问题不是「沙箱在哪」，而是<b>这段同步计算会卡住谁</b>。</p>
+
+<div class="twrap">
+<table>
+<thead><tr><th>沙箱</th><th>VM 跑在哪</th><th>卡住谁</th><th>适用场景</th></tr></thead>
+<tbody>
+<tr><td><code>CodemodeSandbox</code></td><td><b>worker 线程</b>（每次执行一个 VM）</td><td><b>谁也不卡</b>：宿主事件循环不受影响，且能直接 <code>terminate()</code> 硬停</td><td>Node / Bun，应该首选。pi 自己用的就是这个</td></tr>
+<tr><td><code>InlineCodemodeSandbox</code></td><td><b>调用线程内</b></td><td><b>卡住调用方自己</b>（事件循环停摆）</td><td>没有 worker thread、但能跑 WebAssembly 的运行时；且能接受阻塞</td></tr>
+<tr><td><code>RemoteCodemodeSandbox</code></td><td><b>另一个 isolate</b>（通常是单独部署 Worker 里的 Durable Object）</td><td>谁也不卡，但<b>超时控制变弱</b>（见下）</td><td>线程必须保持响应的地方，如 Cloudflare 上服务一个会话的 DO</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="ok">
+  <b class="t">实测：worker 线程真的不会卡宿主</b>
+  写了一个 <b>800 万次循环、不调用任何工具、不 await</b> 的 CPU 密集脚本，同时在宿主里挂一个 50ms 定时器：
+  <code>CodemodeSandbox</code> 下定时器最大间隔仅 <b>63ms</b>（12 次采样）——若跑在调用线程里，这个间隔会接近脚本总执行时长。
+  同一套件还确认：<code>while(true){}</code> 死循环会被打断，报 <code>Execution timed out after 200 ms</code>，不会挂死。
+</div>
+
+<h4>Cloudflare 为什么必须用 Remote：一手数据</h4>
+<p>官方 README 给了 2026-10 的实测：把 QuickJS 放在<b>会话的 Durable Object 内部</b>，或放在该 DO 加载的 Dynamic Worker 里——一个计算 10 秒的脚本，会把该会话对象上<b>所有其它请求延迟完整 10 秒</b>。放到<b>单独部署的 Worker 的 DO</b> 里，延迟降到约 <b>50ms</b>。</p>
+<p>因此 <code>RemoteCodemodeSandbox</code> 的设计是：<b>工具与调用记录留在会话侧，只把 VM 送出去</b>；每次工具调用再经 Workers RPC 回调到会话。绑定时要的是另一个 Worker 里的类（<code>script_name</code>），不能绑自己 Worker 里的类，否则阻塞又回来了。</p>
+
+<div class="warn">
+  <b class="t">超时语义三者不同（最容易踩）</b>
+  <b>①</b> <code>Inline</code> / <code>Remote</code> 靠 <code>interruptBudget</code>（默认 <b>100,000</b> 次 QuickJS 中断回调预算）来打断「不 await 工具」的纯计算；
+  <b>②</b> 远程版有个重要差别（源码原话）：<b>deadline 或 abort 之后，远端 VM 会继续计算，直到它下一次调用工具或耗尽中断预算</b>——所以「超时」不等于「立刻停」；
+  <b>③</b> 本地 worker 版才能硬停（用 <code>Atomics</code> 置中断位 + <code>worker.terminate()</code>）。
+</div>
+
+<div class="note">
+  <b class="t">发布物的现实（避免踩坑）</b>
+  <code>1.1.0</code> 的 npm 包里<b>只有 <code>CodemodeSandbox</code></b>。文档说从 <code>/portable</code> 与 <code>/cloudflare</code> 导入 Inline / Remote，但我实测了发布物的导出面：
+  <code>package.json</code> 的 <code>exports</code> 只有 <code>.</code> / <code>./declarations</code> / <code>./source</code> / <code>./worker</code>，<b>没有 portable 子路径</b>；这两个类目前只存在于源码树的 <code>src/portable.ts</code> / <code>src/cloudflare.ts</code>。
+  要在 Cloudflare 上用，得从源码构建或等后续版本补齐。
+</div>
+<p class="small">另一个打包细节：打包后的 Node 程序里，worker 文件与 QuickJS 的 wasm 不在磁盘上，必须显式传 <code>wasm: loadQuickJSWasm(path)</code> 与 <code>workerUrl</code>。</p>
 
 <div class="codewrap">
   <div class="codehead"><span>模型写出的脚本（真实形态）</span><span class="lang">javascript</span><button class="copy">复制</button></div>
@@ -1352,7 +1392,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
 <!-- ============ 14 ============ -->
 <!-- ============ 13.2 验证实验 ============ -->
-<h3 id="s13-2">13.2 验证实验：8 个套件、73 项检查</h3>
+<h3 id="s13-2">13.2 验证实验：9 个套件、77 项检查</h3>
 <p>下一章会区分「哪些结论有实证」。这一节就是那些实证的来源：为了让矩阵里的「未验证」尽量变成「已验证」，我针对 Pi 的公开 API <b>写了一套可重复运行的验证脚本</b>（已随本报告一并交付）。</p>
 <div class="twrap">
 <table>
@@ -1366,6 +1406,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 <tr><td>v6 prepareLoadout</td><td><code>descriptions</code> 改写、<code>hiddenDeclarations</code>——且要能到达线上请求载荷</td><td>捕获 <code>before_provider_request</code> 的<b>真实载荷</b>逐字检查</td><td><span class="pill g">4/4</span></td></tr>
 <tr><td>v7 Codemode 集成</td><td><b>脚本内部的工具调用不进转录</b>、模型只看到脚本输出</td><td>注入 <code>createCodemodeExtension()</code>，让真实模型写脚本调工具，再检查转录</td><td><span class="pill g">5/5</span></td></tr>
 <tr><td>v8 CLI 三模式</td><td>print / JSON / RPC 三种接口形态</td><td>直接启动 CLI（需先清除继承的 <code>PI_*</code> 环境变量，否则会被当作宿主会话）</td><td><span class="pill g">3/3</span></td></tr>
+<tr><td>v9 沙箱形态</td><td>worker 线程不阻塞宿主、失控脚本被中断、结果对象形态、发布物导出面</td><td>CPU 密集脚本 + 宿主 50ms 定时器探针；比对 <code>package.json</code> 的 <code>exports</code></td><td><span class="pill g">4/4</span></td></tr>
 </tbody>
 </table>
 </div>
@@ -1452,7 +1493,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
 <div class="note">
   <b class="t">汇总</b>
-  <b>28 项结论获得运行级或 API 级实证</b>（其中 16 项来自 13.2 节的 8 个验证套件、共 73 项检查），<b>11 项仍未验证</b>（表 2 逐条说明了原因）。
+  <b>28 项结论获得运行级或 API 级实证</b>（其中 16 项来自 13.2 节的 9 个验证套件、共 77 项检查），<b>11 项仍未验证</b>（表 2 逐条说明了原因）。
   实证集中在一条主链上：<b>内核循环 → 工具执行与错误恢复 → 会话持久化 → 缓存与成本</b>。
   而 Pi 最具有辨识度的几个设计——<b>压缩、并行工具、扩展钩子、五级暴露、codemode、MCP、durable/远程</b>——本次运行都<b>没有碰到</b>，它们仍是「读代码得出的结论」。
   <br><br>
@@ -1495,7 +1536,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 <footer>
   <p><b>Pi Agent 框架调研报告</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜
      <a href="brief.html">6 分钟速览版</a> · <a href="full-report.html">45 分钟完整版（17 章 · 24 代码块）</a></p>
-  <p class="small">本文为「30–35 分钟精读版」：正文约 13,400 字 + 20 张表格 + 17 段代码 + 3 张图表。<b>第 13 章为实测数据与 8 个验证套件（73 项检查全通过），第 14 章为结论验证矩阵（28 项有实证 / 11 项仍未验证）</b>。引用的事件名、常量值、API 名可在源码中直接检索验证。</p>
+  <p class="small">本文为「30–35 分钟精读版」：正文约 13,400 字 + 20 张表格 + 17 段代码 + 3 张图表。<b>第 13 章为实测数据与 9 个验证套件（77 项检查全通过），第 14 章为结论验证矩阵（28 项有实证 / 11 项仍未验证）</b>。引用的事件名、常量值、API 名可在源码中直接检索验证。</p>
 </footer>
 
 </main>
