@@ -49,6 +49,26 @@
 
 > 边界：N=1 单模型单任务、无并发与对照组，**不是性能基准**。
 
+## 扩展示例（`examples/`）
+
+一个**可直接加载的最小 pi 扩展**，以及把它跑通的完整方法（也是 `verify/` 里 v5/v6/v10 的简化可复用版）：
+
+| 文件 | 作用 |
+|---|---|
+| `examples/hello-ext.ts` | 扩展本体：1 个工具（`dir_stats`）+ 1 个命令（`/extlab`）+ 1 个钩子 + 会话生命周期 |
+| `examples/sdk-test.mjs` | 无头验证：加载 → 发命令 → 调工具 → 断言副作用（**4/4 通过**） |
+| `examples/run-cli.sh` | 启动包装（清 `PI_*` 变量、关 MSYS 路径转换、转 Windows 路径） |
+| `examples/README.md` | 三种加载方式 + 三种验证方式 + **11 条实测坑清单** |
+
+```bash
+node examples/sdk-test.mjs                                  # 无头：4/4 通过
+./examples/run-cli.sh --print --no-session -ne -e ./examples/hello-ext.ts \
+  'Call dir_stats with {"path":"."}'                        # 让真实模型调用工具
+./examples/run-cli.sh --print --no-session -ne -e ./examples/hello-ext.ts "/extlab"   # 斜杠命令
+```
+
+> 已安装到用户目录（`<agent-dir>/extensions/`）时，`-e` 加载同一份文件会报工具同名冲突，加 `-ne` 即可。
+
 ## 验证脚本（`verify/`）
 
 为了把「未验证」的结论尽量变成「已验证」，本仓库附了一套可重复运行的验证脚本 —— **8 个套件、73 项检查，全部通过**：
