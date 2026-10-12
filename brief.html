@@ -173,31 +173,32 @@ footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:v
   一面是<b>极高迭代速度</b>（近 30 天 498 commits，约 16 次/天，302 个 tag）；另一面是<b>尚未稳定</b>——提交构成里 <code>fix</code> 占多数，且 6 个包（durable / server / client / protocol / env / evals）README 明确标注 <i>experimental，API 可能随时变更</i>。<b>用就锁 tag，别追 main。</b>
 </div>
 
-<h2 id="arch"><span class="num">03</span>架构一张图</h2>
-<p>依赖方向自上而下。关键点：<b>下层不认识上层</b>，所以模型层与循环层可以被单独复用（<code>chord</code> 是唯一例外——它不属于 Pi，零 Pi 依赖）。</p>
+<h2 id="arch"><span class="num">03</span>依赖结构（实测）</h2>
+<p><b>依赖方向单向、无环是成立的</b>（对 14 个包的 <code>dependencies</code> 做拓扑检验）；但真实形状不是「四层」，是<b>两条互不依赖的主线</b>：</p>
+<ul>
+  <li><b>主线 A · 编码 Agent</b>：<code>telemetry → ai → agent → coding-agent</code>（<code>agent</code> 只依赖 <code>ai</code>，所以「只取两个包自建 Agent」成立）</li>
+  <li><b>主线 B · 持久化与远程</b>：<code>chord → {protocol → client/server, ai → durable → env}</code></li>
+</ul>
+<p>两个易错点：<b>①</b> <code>durable</code> 不依赖 <code>agent-core</code>（源码里零引用），它是<b>第二套 agent 运行时</b>；<b>②</b> <code>codemode</code> / <code>mcp</code> / <code>tui</code> / <code>chord</code> / <code>telemetry</code> 是 <b>T0 独立底座</b>（零仓内依赖），不属于任何层级。</p>
 
 <div class="arch">
-  <div class="row"><div class="tag">L4 应用</div><div class="cells">
-    <div class="cell hi"><b>pi-coding-agent</b> CLI + 工具 + 会话 + 扩展</div>
-    <div class="cell hi"><b>pi-durable</b> 崩溃安全 harness</div>
-    <div class="cell hi"><b>server/client</b> 远程会话</div>
+  <div class="row"><div class="tag">T3 顶层</div><div class="cells">
+    <div class="cell hi"><b>pi-coding-agent</b> 唯一的顶层消费者（6 个仓内依赖）</div>
+    <div class="cell hi"><b>pi-env</b> 远程执行（建在 durable 之上）</div>
   </div></div>
-  <div class="row"><div class="tag">L3 会话</div><div class="cells">
-    <div class="cell">SessionManager（JSONL 树）</div>
-    <div class="cell">Compaction（压缩/分支摘要）</div>
-    <div class="cell">Extension Runtime</div>
-    <div class="cell">Settings / ModelRuntime / 凭据</div>
+  <div class="row"><div class="tag">T2</div><div class="cells">
+    <div class="cell"><b>pi-agent-core</b> ← ai</div>
+    <div class="cell"><b>pi-durable</b> ← chord, ai</div>
+    <div class="cell"><b>pi-client</b> ← chord, protocol</div>
+    <div class="cell"><b>pi-server</b> ← chord, protocol</div>
   </div></div>
-  <div class="row"><div class="tag">L2 循环</div><div class="cells">
-    <div class="cell hi"><b>pi-agent-core</b> 949 行循环：turn、工具批、队列、事件</div>
+  <div class="row"><div class="tag">T1</div><div class="cells">
+    <div class="cell"><b>pi-ai</b> ← telemetry</div>
+    <div class="cell"><b>pi-protocol</b> ← chord</div>
   </div></div>
-  <div class="row"><div class="tag">L1 模型</div><div class="cells">
-    <div class="cell hi"><b>pi-ai</b> 42 个内置 Provider、流式事件、用量与成本</div>
-  </div></div>
-  <div class="row"><div class="tag">L0 支撑</div><div class="cells">
-    <div class="cell">pi-tui（差分渲染）</div><div class="cell">pi-codemode（QuickJS 沙箱）</div>
-    <div class="cell">pi-mcp（自研 MCP 客户端）</div><div class="cell">pi-env（SSH 远程执行）</div>
-    <div class="cell">pi-protocol（CBOR 分帧）</div><div class="cell">pi-telemetry</div>
+  <div class="row"><div class="tag">T0 独立</div><div class="cells">
+    <div class="cell">chord</div><div class="cell">telemetry</div><div class="cell">tui</div>
+    <div class="cell">codemode</div><div class="cell">mcp</div><div class="cell">evals</div>
   </div></div>
 </div>
 

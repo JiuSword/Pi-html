@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pi Agent 框架调研报告 | 30–35 分钟精读版</title>
-<meta name="description" content="Pi（earendil-works/pi）Agent 框架调研报告：核心架构图、关键代码、五个关键设计、上下文工程、codemode、风险与选型。面向 Agent 开发工程师。">
+<meta name="description" content="Pi（earendil-works/pi）Agent 框架调研报告：核心依赖图、关键代码、五个关键设计、上下文工程、codemode、风险与选型。面向 Agent 开发工程师。">
 <style>
 :root{
   --bg:#0a0e13;--panel:#111923;--panel-2:#151f2b;--line:#1e2b39;--line-2:#27384a;
@@ -128,7 +128,7 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
   <a href="#s0">摘要 · 十条结论</a>
   <a href="#s1">1 项目定位与全景</a>
   <a href="#s2">2 核心架构</a>
-  <a class="lv2" href="#s2-1">2.1 分层架构图</a>
+  <a class="lv2" href="#s2-1">2.1 依赖结构（实测）</a>
   <a class="lv2" href="#s2-2">2.2 请求生命周期图</a>
   <a class="lv2" href="#s2-3">2.3 状态权威归属</a>
   <a href="#s3">3 模型层 pi-ai</a>
@@ -156,8 +156,6 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
   <a href="#s14">14 结论验证矩阵</a>
   <a href="#appendix">附录</a>
   <div class="sep"></div>
-  <a class="go" href="brief.html">→ 6 分钟速览版</a>
-  <a class="go b" href="full-report.html">→ 45 分钟完整版</a>
 </nav>
 
 <main>
@@ -167,7 +165,7 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
   <p class="lede">
     对 <code>github.com/earendil-works/pi</code> 的系统性调研：从统一模型层 <b>pi-ai</b>、Agent 循环 <b>pi-agent-core</b>，
     到应用层的工具体系、上下文工程、扩展机制与 <b>codemode</b> 沙箱。本文只保留做技术判断真正需要的信息——
-    <b>2 张核心架构图、10 段关键代码、可迁移的设计模式，以及一份诚实的风险清单</b>。
+    <b>2 张核心依赖图、10 段关键代码、可迁移的设计模式，以及一份诚实的风险清单</b>。
   </p>
   <div class="metagrid">
     <div class="m"><div class="k">调研对象</div><div class="v">earendil-works/pi</div></div>
@@ -176,10 +174,6 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
     <div class="m"><div class="k">社区规模</div><div class="v">114,152 ★</div></div>
     <div class="m"><div class="k">源码 / 测试</div><div class="v">18.1 / 19.2 <small>万行</small></div></div>
     <div class="m"><div class="k">许可 · 运行时</div><div class="v">MIT <small>· Node ≥ 22.19</small></div></div>
-  </div>
-  <div class="siblings">
-    <a href="brief.html">6 分钟速览</a>
-    <a href="full-report.html">45 分钟完整版（17 章 · 24 代码块）</a>
   </div>
 </header>
 
@@ -192,7 +186,7 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
 <thead><tr><th>#</th><th>结论</th><th>为什么重要</th></tr></thead>
 <tbody>
 <tr><td>1</td><td>它是 <b>harness（底座）</b>，不是框架全家桶</td><td>官方明确「不做 sub-agents、不做 plan mode、不做内置沙箱」，把这些留给扩展与部署层。评估时要按「可改造的底座」而不是「开箱即用的平台」来打分</td></tr>
-<tr><td>2</td><td>四层可独立取用，依赖方向单向</td><td><code>pi-ai</code> → <code>pi-agent-core</code> → <code>pi-coding-agent</code> → 分布式层。你可以只用前两层做自己的 Agent，不必吃下整个 CLI</td></tr>
+<tr><td>2</td><td><b>依赖方向单向（实测无环）</b>；但应说「四个依赖梯队」而非「四层」</td><td><code>ai</code> → <code>agent</code> → <code>coding-agent</code> 是一条主线；<code>ai</code>+<code>chord</code> → <code>durable</code> → <code>env</code> 是<b>另一条互不依赖的主线</b>。只取前两个包就能自建 Agent（<code>agent</code> 确实只依赖 <code>ai</code>）；但注意 <code>durable</code> 是<b>第二套 agent 运行时</b>，它不用 <code>agent-core</code></td></tr>
 <tr><td>3</td><td>内核极小：循环 <b>949 行</b>，模型层 2.7 万行，应用层 8.6 万行</td><td>复杂度集中在「工具怎么暴露、上下文怎么回收、能力怎么插进来」三个真问题，而非抽象层次</td></tr>
 <tr><td>4</td><td><b>Transcript 是唯一权威</b></td><td>会话记录决定 system prompt、工具声明与模型上下文。这消灭了「UI 看到的 ≠ 模型看到的」这类最难查的 bug</td></tr>
 <tr><td>5</td><td>工具是 <b>五级暴露模型</b></td><td><code>direct / model-only / codemode / deferred / hidden</code>：「模型看得到」≠「能调得动」。MCP 工具爆炸时这是决定 token 成本的关键设计</td></tr>
@@ -263,111 +257,102 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
 <!-- ============ 2 ============ -->
 <h2 id="s2"><span class="num">02</span>核心架构</h2>
 
-<h3 id="s2-1">2.1 分层架构图</h3>
-<p>下图是 Pi 的整体结构。注意两个特征：<b>依赖方向严格单向</b>（上层依赖下层，下层不认识上层），以及<b>能力层是可插拔的平铺结构</b>（codemode、MCP、远程执行、终端 UI 都在同一层，互不依赖）。</p>
+<h3 id="s2-1">2.1 依赖结构（按 package.json 实测，不是概念分层）</h3>
+<p class="small">本节结论来自对 <b>14 个包 <code>package.json</code> 的 <code>dependencies</code> 逐条提取</b>，并做了拓扑检查。不是「看文档画出来的分层图」。</p>
 
+<div class="ok">
+  <b class="t">两个断言，一对一错</b>
+  <b>✅「依赖方向单向」成立</b>：对这 14 个包做拓扑检验，<b>无环</b>；也没有任何包反向依赖 <code>pi-coding-agent</code>。<br>
+  <b>❌「四层」不准确</b>：真实的依赖梯队是 4 个（T0→T3），但<b>每层装的东西与常见画法不同</b>——尤其是「会话/运行时」并不是一层包，那些模块都在 <code>pi-coding-agent</code> <b>内部</b>；而 <code>durable</code> / <code>client</code> / <code>server</code> 与 <code>agent</code> <b>同级</b>，不是应用层。
+</div>
+
+<h4>完整依赖边表（源 → 目标）</h4>
+<div class="twrap">
+<table>
+<thead><tr><th>梯队</th><th>包</th><th>依赖的同仓包</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td rowspan="6"><b>T0</b><br>零仓内依赖</td><td><code>chord</code></td><td>—</td><td>应用组合运行时（facets / services / 复制状态），本身不是 Pi 包</td></tr>
+<tr><td><code>telemetry</code></td><td>—</td><td>遥测契约</td></tr>
+<tr><td><code>tui</code></td><td>—</td><td>终端 UI 框架</td></tr>
+<tr><td><code>codemode</code></td><td>—</td><td>QuickJS 沙箱，<b>对 pi 零依赖</b>，可单独用于暴露任意函数给模型写的脚本</td></tr>
+<tr><td><code>mcp</code></td><td>—</td><td>自研 MCP 客户端，同样零 pi 依赖</td></tr>
+<tr><td><code>evals</code></td><td>—</td><td>评测</td></tr>
+<tr><td rowspan="2"><b>T1</b></td><td><code>ai</code></td><td>telemetry</td><td>模型层；注意它<b>依赖 telemetry</b>，不是「什么都依赖它」的底座</td></tr>
+<tr><td><code>protocol</code></td><td>chord</td><td>CBOR 路由协议（experimental）</td></tr>
+<tr><td rowspan="4"><b>T2</b></td><td><code>agent</code></td><td>ai</td><td>Agent 循环，<b>只依赖 ai</b>——所以「只取 ai+agent 就能自建 Agent」是成立的</td></tr>
+<tr><td><code>durable</code></td><td>chord, ai</td><td><b>不依赖 agent</b>：它自带 harness / session / tasks，是<b>第二条 agent 运行时</b></td></tr>
+<tr><td><code>client</code></td><td>chord, protocol</td><td>传输无关客户端</td></tr>
+<tr><td><code>server</code></td><td>chord, protocol</td><td>会话路由服务端</td></tr>
+<tr><td rowspan="2"><b>T3</b></td><td><code>coding-agent</code></td><td>chord, agent, ai, codemode, mcp, tui</td><td>唯一的顶层消费者（6 个依赖）；没有任何包依赖它</td></tr>
+<tr><td><code>env</code></td><td>chord, durable</td><td>远程执行（SSH daemon）；<b>建在 durable 之上</b>，不在「应用层」</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>真实形状：两条互不依赖的主线</h4>
 <div class="fig">
-<svg viewBox="0 0 920 590" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pi 分层架构图">
+<svg viewBox="0 0 920 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pi 包依赖图：两条主线">
   <defs>
-    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
-      <path d="M0,0 L7,3.2 L0,6.4 z" fill="#4cc2ff"/>
-    </marker>
-    <marker id="arg" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
-      <path d="M0,0 L7,3.2 L0,6.4 z" fill="#6ee7a0"/>
-    </marker>
+    <marker id="dep" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 z" fill="#4cc2ff"/></marker>
     <style>
-      .lt{font:600 12px var(--sans);fill:#7d8fa3}
-      .bt{font:600 13px var(--sans);fill:#ffffff}
-      .bs{font:400 10.5px var(--mono);fill:#8b98a8}
       .bx{fill:#111923;stroke:#1e2b39;stroke-width:1}
-      .bxh{fill:rgba(76,194,255,.13);stroke:#4cc2ff;stroke-width:1.4}
-      .bxg{fill:rgba(110,231,160,.11);stroke:#6ee7a0;stroke-width:1.4}
-      .bxp{fill:rgba(187,154,247,.12);stroke:#bb9af7;stroke-width:1.4}
-      .band{fill:rgba(255,255,255,.018);stroke:none}
-      .ax{stroke:#4cc2ff;stroke-width:1.4;marker-end:url(#ar)}
-      .axg{stroke:#6ee7a0;stroke-width:1.4;marker-end:url(#arg);stroke-dasharray:4 3}
+      .bx0{fill:rgba(255,255,255,.03);stroke:#2b3a4a}
+      .bx1{fill:rgba(76,194,255,.11);stroke:#4cc2ff}
+      .bx2{fill:rgba(187,154,247,.12);stroke:#bb9af7}
+      .t{font:600 12.5px var(--sans);fill:#fff}
+      .s{font:400 10.5px var(--mono);fill:#8b98a8}
+      .lbl{font:600 11.5px var(--sans);fill:#7d8fa3}
+      .e{stroke:#4cc2ff;stroke-width:1.3;marker-end:url(#dep);fill:none}
     </style>
   </defs>
 
-  <!-- 依赖方向轴 -->
-  <line class="axg" x1="34" y1="90" x2="34" y2="520"/>
-  <text x="24" y="300" class="bs" transform="rotate(-90 24 300)" text-anchor="middle">依赖方向（单向向下）</text>
+  <text x="24" y="26" class="lbl">T0 · 零仓内依赖（平等独立，不属于任何层级）</text>
+  <rect class="bx bx0" x="24"  y="36" width="128" height="30" rx="7"/><text x="40" y="55" class="t">chord</text>
+  <rect class="bx bx0" x="164" y="36" width="128" height="30" rx="7"/><text x="180" y="55" class="t">telemetry</text>
+  <rect class="bx bx0" x="304" y="36" width="128" height="30" rx="7"/><text x="320" y="55" class="t">tui</text>
+  <rect class="bx bx0" x="444" y="36" width="128" height="30" rx="7"/><text x="460" y="55" class="t">codemode</text>
+  <rect class="bx bx0" x="584" y="36" width="128" height="30" rx="7"/><text x="600" y="55" class="t">mcp</text>
+  <rect class="bx bx0" x="724" y="36" width="128" height="30" rx="7"/><text x="740" y="55" class="t">evals</text>
 
-  <!-- L4 -->
-  <rect class="band" x="60" y="62" width="840" height="112" rx="10"/>
-  <text x="72" y="82" class="lt">L4 · 应用与接入层</text>
-  <rect class="bx bxh" x="72" y="92" width="266" height="66" rx="8"/>
-  <text x="86" y="115" class="bt">pi-coding-agent</text>
-  <text x="86" y="133" class="bs">CLI · 内置工具 · 会话树 · 扩展运行时</text>
-  <text x="86" y="148" class="bs">TUI / print / JSON / RPC 四种模式</text>
-  <rect class="bx bxh" x="350" y="92" width="176" height="66" rx="8"/>
-  <text x="364" y="115" class="bt">pi-durable</text>
-  <text x="364" y="133" class="bs">崩溃安全 harness</text>
-  <text x="364" y="148" class="bs">任务图 / 子任务 / 恢复</text>
-  <rect class="bx bxh" x="538" y="92" width="176" height="66" rx="8"/>
-  <text x="552" y="115" class="bt">pi-server + pi-client</text>
-  <text x="552" y="133" class="bs">远程会话路由</text>
-  <text x="552" y="148" class="bs">多 presentation 挂载</text>
-  <rect class="bx" x="726" y="92" width="162" height="66" rx="8"/>
-  <text x="740" y="115" class="bt">chord</text>
-  <text x="740" y="133" class="bs">facets / services</text>
-  <text x="740" y="148" class="bs">复制状态（非 Pi 包）</text>
+  <!-- 主线 A：编码 agent -->
+  <text x="24" y="118" class="lbl">主线 A · 编码 Agent（telemetry → ai → agent → coding-agent）</text>
+  <rect class="bx bx1" x="24"  y="130" width="150" height="34" rx="7"/><text x="40" y="152" class="t">ai</text>
+  <rect class="bx bx1" x="232" y="130" width="150" height="34" rx="7"/><text x="248" y="152" class="t">agent</text>
+  <rect class="bx bx1" x="440" y="130" width="200" height="34" rx="7"/><text x="456" y="152" class="t">coding-agent</text>
+  <line class="e" x1="174" y1="147" x2="228" y2="147"/>
+  <line class="e" x1="382" y1="147" x2="436" y2="147"/>
+  <text x="660" y="152" class="s">+ chord / codemode / mcp / tui</text>
 
-  <line class="ax" x1="460" y1="176" x2="460" y2="196"/>
-
-  <!-- L3 -->
-  <rect class="band" x="60" y="198" width="840" height="100" rx="10"/>
-  <text x="72" y="218" class="lt">L3 · 会话与运行时装配层</text>
-  <rect class="bx" x="72" y="228" width="196" height="56" rx="8"/>
-  <text x="86" y="250" class="bt">SessionManager</text>
-  <text x="86" y="268" class="bs">JSONL 树 · 活动分支 · 投影</text>
-  <rect class="bx" x="280" y="228" width="196" height="56" rx="8"/>
-  <text x="294" y="250" class="bt">Compaction</text>
-  <text x="294" y="268" class="bs">摘要切点 · 分支摘要 · 溢出恢复</text>
-  <rect class="bx" x="488" y="228" width="196" height="56" rx="8"/>
-  <text x="502" y="250" class="bt">Extension Runtime</text>
-  <text x="502" y="268" class="bs">工具/命令/事件/渲染器注册</text>
-  <rect class="bx" x="696" y="228" width="192" height="56" rx="8"/>
-  <text x="710" y="250" class="bt">ModelRuntime · Settings</text>
-  <text x="710" y="268" class="bs">凭据 · 作用域模型 · 设置合并</text>
-
-  <line class="ax" x1="460" y1="300" x2="460" y2="320"/>
-
-  <!-- L2 -->
-  <rect class="band" x="60" y="322" width="840" height="82" rx="10"/>
-  <text x="72" y="342" class="lt">L2 · Agent 循环（决策层）</text>
-  <rect class="bx bxh" x="72" y="352" width="612" height="42" rx="8"/>
-  <text x="86" y="372" class="bt">pi-agent-core — <tspan class="bs">Agent / agentLoop：949 行</tspan></text>
-  <text x="86" y="387" class="bs">turn 生命周期 · 工具批（并行/串行）· steering / follow-up 队列 · 10 种事件</text>
-  <rect class="bx bxh" x="696" y="352" width="192" height="42" rx="8"/>
-  <text x="710" y="372" class="bt">消息边界转换</text>
-  <text x="710" y="387" class="bs">AgentMessage ⇄ LLM Message</text>
-
-  <line class="ax" x1="460" y1="406" x2="460" y2="426"/>
-
-  <!-- L1 -->
-  <rect class="band" x="60" y="428" width="840" height="66" rx="10"/>
-  <text x="72" y="448" class="lt">L1 · 模型抽象层</text>
-  <rect class="bx bxg" x="72" y="456" width="816" height="30" rx="8"/>
-  <text x="86" y="476" class="bt">pi-ai — <tspan class="bs">42 个内置 Provider 工厂 · models.dev 生成的模型目录 · 流式事件 · 用量与成本 · 鉴权解析链</tspan></text>
-
-  <line class="ax" x1="460" y1="496" x2="460" y2="514"/>
-
-  <!-- L0 -->
-  <rect class="band" x="60" y="516" width="840" height="60" rx="10"/>
-  <text x="72" y="534" class="lt">L0 · 能力支撑层（互不依赖，可单独取用）</text>
-  <rect class="bx" x="72" y="542" width="130" height="26" rx="7"/><text x="82" y="559" class="bs">pi-tui 终端框架</text>
-  <rect class="bx bxg" x="212" y="542" width="146" height="26" rx="7"/><text x="222" y="559" class="bs">pi-codemode 沙箱</text>
-  <rect class="bx" x="368" y="542" width="130" height="26" rx="7"/><text x="378" y="559" class="bs">pi-mcp 客户端</text>
-  <rect class="bx" x="508" y="542" width="130" height="26" rx="7"/><text x="518" y="559" class="bs">pi-env 远程执行</text>
-  <rect class="bx" x="648" y="542" width="130" height="26" rx="7"/><text x="658" y="559" class="bs">pi-protocol CBOR</text>
-  <rect class="bx" x="788" y="542" width="100" height="26" rx="7"/><text x="798" y="559" class="bs">pi-telemetry</text>
+  <!-- 主线 B：持久化与远程 -->
+  <text x="24" y="212" class="lbl">主线 B · 持久化与远程（与主线 A 无任何依赖边）</text>
+  <rect class="bx bx2" x="24"  y="224" width="150" height="34" rx="7"/><text x="40" y="246" class="t">protocol</text>
+  <rect class="bx bx2" x="232" y="224" width="150" height="34" rx="7"/><text x="248" y="246" class="t">durable</text>
+  <rect class="bx bx2" x="440" y="224" width="130" height="34" rx="7"/><text x="456" y="246" class="t">env</text>
+  <rect class="bx bx2" x="620" y="224" width="120" height="34" rx="7"/><text x="636" y="246" class="t">client</text>
+  <rect class="bx bx2" x="760" y="224" width="120" height="34" rx="7"/><text x="776" y="246" class="t">server</text>
+  <line class="e" x1="174" y1="241" x2="228" y2="241"/>
+  <line class="e" x1="382" y1="241" x2="436" y2="241"/>
+  <line class="e" x1="174" y1="241" x2="174" y2="196" />
+  <line class="e" x1="174" y1="196" x2="612" y2="196" />
+  <line class="e" x1="560" y1="196" x2="560" y2="220" />
+  <line class="e" x1="612" y1="196" x2="612" y2="220" />
+  <line class="e" x1="700" y1="196" x2="700" y2="220" />
+  <text x="24" y="300" class="s">chord（T0）同时被 protocol 与 durable 依赖；client / server 都建在 chord + protocol 之上；env 建在 chord + durable 之上</text>
+  <text x="24" y="318" class="s">两条主线之间没有任何依赖边：durable 不依赖 agent，coding-agent 不依赖 durable / protocol / client / server</text>
 </svg>
 <div class="figcap">
-  <b>如何读这张图</b>：左侧绿色虚线是依赖方向；蓝色描边（<code>pi-coding-agent</code>、<code>pi-agent-core</code>）是核心可复用层，绿色描边（<code>pi-ai</code>、<code>pi-codemode</code>）是最具独立价值的两个包。
-  <b>只取 L1+L2 就能自建 Agent；只取 L1 就能自建多模态应用。</b>
+  <b>怎么读</b>：横向是依赖方向（左被右依赖）。T0 的六个包是<b>平等独立</b>的基础库——它们不「属于」某一层，只是恰好没有仓内依赖。
+  主线 A 与主线 B <b>互不依赖</b>，这是 Pi 里最值得注意的结构事实。
 </div>
 </div>
+
+<div class="note">
+  <b class="t">三个被这张图纠正/强化的结论</b>
+  ① <b>「四层」应改为「四个依赖梯队」</b>，且「会话与运行时装配层」不是一层包：<code>SessionManager</code>、<code>Compaction</code>、<code>Extension Runtime</code>、<code>ModelRuntime</code> 都是 <code>pi-coding-agent</code> <b>内部的模块</b>（第 3–6 章讲的那些机制都在这个包里）。<br>
+  ② <b>Pi 有两套 agent 运行时</b>：<code>pi-agent-core</code>（只依赖 <code>ai</code>）与 <code>pi-durable</code>（依赖 <code>chord</code>+<code>ai</code>，<b>源码里对 agent-core 零引用</b>，自带 harness / session / tasks）。选型时这是两条独立路线，不是「一层套一层」。<br>
+  ③ <b>「分布式层」这个叫法不准确</b>。那一栈其实是<b>四件不同的事</b>：持久化运行时（<code>durable</code>）、远程执行（<code>env</code>）、线上协议（<code>protocol</code>）、会话路由（<code>client</code>/<code>server</code>），其中 protocol/client/server/env 都标注 experimental。本文后续统一称<b>「持久化与远程栈」</b>。
+</div>
+<p class="small">实测方法：从 14 个包的 <code>package.json</code> 提取 <code>dependencies</code> 过滤 <code>@earendil-works/*</code>，做拓扑排序检查环（结果：无环），再用 <code>grep</code> 确认 <code>durable/src</code> 中没有 <code>pi-agent-core</code> 引用。</p>
 
 <h3 id="s2-2">2.2 一次请求的完整生命周期</h3>
 <p>下面这张图是本文最有操作价值的部分：它把「用户按回车」到「agent_settled」之间的<b>全部环节与可干预点</b>标了出来。黄色标记处是扩展能够介入的位置。</p>
@@ -1341,24 +1326,10 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
 <div class="note">
   <b class="t">先说清这组数据是怎么产生的</b>
-  它不是「扔一个目标给 AI，自动生成一份报告」。真实的形态是<b>人主导、AI 执行、人反复校正</b>：调研对象、目标受众、交付形态、篇幅与分层、验收标准、以及每一轮纠错意见，全部来自发起人；
-  AI 承担的是读源码、跑实验、写交付物这类工作量密集的部分。<b>本章最有价值的数据恰恰是「校正环节」</b>——见下方分工表。
+  它不是「扔一个目标给 AI，自动生成一份报告」。真实的形态是<b>人主导、AI 执行、人反复校正</b>：初始文档、调研对象、目标受众、交付形态、篇幅与分层、验收标准、以及每一轮纠错意见，全部来自发起人；
+  AI 承担的是读源码、跑实验、写交付物这类工作量密集的部分。<b>本章最有价值的数据恰恰是人工「校正环节」</b>
 </div>
 
-<h4>任务的真实分工</h4>
-<div class="twrap">
-<table>
-<thead><tr><th>环节</th><th>发起人（人）的贡献</th><th>AI 的贡献</th></tr></thead>
-<tbody>
-<tr><td>选题与定位</td><td>指定调研对象（<code>earendil-works/pi</code>）、确定目标受众（Agent 开发工程师）与交付形态（HTML 报告）</td><td>识别出这是一次源码级调研，确定以「源码 + 官方文档 + 完整 git 历史」为证据基础</td></tr>
-<tr><td>交付形态与篇幅</td><td>要求分三层（速览 / 精读 / 完整），并指定主报告目标阅读时长</td><td>把篇幅要求换算成可度量的写作指标（中文字数 / 代码行数），并逐版校准</td></tr>
-<tr><td>验收标准</td><td>提出「概念必须讲清而不是罗列」、「要有核心架构图与关键代码示意」、「矩阵里未验证的要去真实验证」</td><td>按标准重写章节、手写两张架构图、编出 10 个可重复运行的验证套件</td></tr>
-<tr><td><b>纠错（最关键）</b></td><td><b>五轮实质性纠正</b>：① codemode 看了不懂 → 要求讲清概念；② 自研 MCP 客户端与官方差别未说明；③ 指出「压缩顶到天花板」与数据矛盾；④ 指出事件数量根本没列；⑤ 要求把「未验证」真跑一遍</td><td>每次回溯源码、定位根因、修正结论并更新全部三份报告</td></tr>
-<tr><td>事实校验</td><td>指出「实际已跑通端到端」——纠正了报告里「未使用真实 API key」的错误表述</td><td>从会话 JSONL 提取真实 token / 成本 / 延迟 / 错误率数据，新增实测章节</td></tr>
-<tr><td>执行与工程</td><td>把握方向与取舍，决定何时交付、何时继续深挖</td><td>读 37 篇文档 + 14 包源码、写 10 个验证套件、生成三份报告、完成 4 次 git 提交与推送</td></tr>
-</tbody>
-</table>
-</div>
 <div class="ok">
   <b class="t">为什么「人的贡献」在这里是结论的一部分</b>
   五轮纠正中有 <b>四轮改掉了实质性错误</b>：一条结论与数据相矛盾（12.3）、一个核心概念根本没说清（7.1）、一个自研选择的差异缺失（7.3）、一个数字凭空写错（4.2）。
@@ -1451,7 +1422,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
 <!-- ============ 14 ============ -->
 <!-- ============ 13.2 验证实验 ============ -->
-<h3 id="s13-2">13.2 验证实验：10 个套件、83 项检查</h3>
+<h3 id="s13-2">13.2 验证实验：11 个套件、89 项检查</h3>
 <p>下一章会区分「哪些结论有实证」。这一节就是那些实证的来源：为了让矩阵里的「未验证」尽量变成「已验证」，我针对 Pi 的公开 API <b>写了一套可重复运行的验证脚本</b>（已随本报告一并交付）。</p>
 <div class="twrap">
 <table>
@@ -1465,6 +1436,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 <tr><td>v6 prepareLoadout</td><td><code>descriptions</code> 改写、<code>hiddenDeclarations</code>——且要能到达线上请求载荷</td><td>捕获 <code>before_provider_request</code> 的<b>真实载荷</b>逐字检查</td><td><span class="pill g">4/4</span></td></tr>
 <tr><td>v7 Codemode 集成</td><td><b>脚本内部的工具调用不进转录</b>、模型只看到脚本输出</td><td>注入 <code>createCodemodeExtension()</code>，让真实模型写脚本调工具，再检查转录</td><td><span class="pill g">5/5</span></td></tr>
 <tr><td>v8 CLI 三模式</td><td>print / JSON / RPC 三种接口形态</td><td>直接启动 CLI（需先清除继承的 <code>PI_*</code> 环境变量，否则会被当作宿主会话）</td><td><span class="pill g">3/3</span></td></tr>
+<tr><td>v11 依赖图</td><td>依赖方向单向（无环）、coding-agent 是纯顶层、agent 只依赖 ai、durable 不复用 agent-core</td><td>从 14 个 package.json 提取 dependencies 做拓扑检验；grep durable/src 查 agent-core 引用</td><td><span class="pill g">6/6</span></td></tr>
 <tr><td>v10 事件类型</td><td>低层循环到底是几种事件、message_update 只对 assistant、tool_execution_update 由 onUpdate 触发、三层事件数量差异</td><td>faux provider 跑一轮带两工具（含 onUpdate）的对话，枚举实际发出的事件类型</td><td><span class="pill g">6/6</span></td></tr>
 <tr><td>v9 沙箱形态</td><td>worker 线程不阻塞宿主、失控脚本被中断、结果对象形态、发布物导出面</td><td>CPU 密集脚本 + 宿主 50ms 定时器探针；比对 <code>package.json</code> 的 <code>exports</code></td><td><span class="pill g">4/4</span></td></tr>
 </tbody>
@@ -1595,7 +1567,7 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
 <footer>
   <p><b>Pi Agent 框架调研报告</b> · 基线 <code>ea448f4</code> · <code>v1.1.0</code> · MIT ｜
-     <a href="brief.html">6 分钟速览版</a> · <a href="full-report.html">45 分钟完整版（17 章 · 24 代码块）</a></p>
+  </p>
   <p class="small">本文为「30–35 分钟精读版」：正文约 13,400 字 + 20 张表格 + 17 段代码 + 3 张图表。<b>第 13 章为实测数据与 10 个验证套件（83 项检查全通过），第 14 章为结论验证矩阵（28 项有实证 / 11 项仍未验证）</b>。引用的事件名、常量值、API 名可在源码中直接检索验证。</p>
 </footer>
 

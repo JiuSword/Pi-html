@@ -305,7 +305,7 @@ footer.end{margin-top:70px;padding-top:26px;border-top:1px solid var(--line);col
 
 <div class="cards">
   <div class="card"><div class="n">01</div><h5>它是「harness」，不是「框架全家桶」</h5><p>自述为 <em>minimal, extensible agent harness that you can make your own</em>。刻意不做 sub-agents 与 plan mode，把这类能力留给扩展生态。</p></div>
-  <div class="card"><div class="n">02</div><h5>四层可独立取用</h5><p><code>pi-ai</code>（模型）→ <code>pi-agent-core</code>（循环）→ <code>pi-coding-agent</code>（应用）→ <code>durable/server/protocol</code>（分布式）。下层不强依赖上层，SDK 可按需取用。</p></div>
+  <div class="card"><div class="n">02</div><h5>依赖方向单向（实测无环），但是两条并行主线</h5><p><code>ai → agent → coding-agent</code> 是一线；<code>ai+chord → durable → env</code> 是另一线，两者<b>互不依赖</b>。<code>agent</code> 确实只依赖 <code>ai</code>，所以「只取两个包自建 Agent」成立；但 <code>durable</code> 是<b>第二套运行时</b>，不用 <code>agent-core</code>。</p></div>
   <div class="card"><div class="n">03</div><h5>1.8 万行内核 vs 8.6 万行应用</h5><p>真正的 Agent 循环只有 <b>949 行</b>（<code>agent-loop.ts</code>），模型层 2.7 万行。复杂度集中在应用层的工具/会话/扩展/UI 装配。</p></div>
   <div class="card"><div class="n">04</div><h5>Transcript 是唯一权威</h5><p>会话记录决定 system prompt、工具声明与模型上下文；<code>agent.state.messages = [...]</code> 不会替换持久化上下文。这是避免「两份上下文」bug 的关键设计。</p></div>
   <div class="card"><div class="n">05</div><h5>工具暴露分级（5 档）</h5><p><code>direct / model-only / codemode / deferred / hidden</code>。「模型看得到的工具」≠「能调用的工具」，用于 token 经济与编排。</p></div>
