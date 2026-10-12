@@ -289,60 +289,100 @@ footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:v
 </table>
 </div>
 
-<h4>真实形状：两条互不依赖的主线</h4>
+<h4>依赖结构图（分层视图，按实测结果绘制）</h4>
 <div class="fig">
-<svg viewBox="0 0 920 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pi 包依赖图：两条主线">
+<svg viewBox="0 0 920 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pi 包依赖分层图（实测）">
   <defs>
-    <marker id="dep" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 z" fill="#4cc2ff"/></marker>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+      <path d="M0,0 L7,3.2 L0,6.4 z" fill="#4cc2ff"/>
+    </marker>
+    <marker id="arg" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+      <path d="M0,0 L7,3.2 L0,6.4 z" fill="#6ee7a0"/>
+    </marker>
     <style>
+      .lt{font:600 12px var(--sans);fill:#7d8fa3}
+      .bt{font:600 13px var(--sans);fill:#ffffff}
+      .bs{font:400 10.5px var(--mono);fill:#8b98a8}
       .bx{fill:#111923;stroke:#1e2b39;stroke-width:1}
-      .bx0{fill:rgba(255,255,255,.03);stroke:#2b3a4a}
-      .bx1{fill:rgba(76,194,255,.11);stroke:#4cc2ff}
-      .bx2{fill:rgba(187,154,247,.12);stroke:#bb9af7}
-      .t{font:600 12.5px var(--sans);fill:#fff}
-      .s{font:400 10.5px var(--mono);fill:#8b98a8}
-      .lbl{font:600 11.5px var(--sans);fill:#7d8fa3}
-      .e{stroke:#4cc2ff;stroke-width:1.3;marker-end:url(#dep);fill:none}
+      .bxh{fill:rgba(76,194,255,.13);stroke:#4cc2ff;stroke-width:1.4}
+      .bxp{fill:rgba(187,154,247,.12);stroke:#bb9af7;stroke-width:1.4}
+      .bx0{fill:rgba(255,255,255,.035);stroke:#2b3a4a;stroke-width:1}
+      .band{fill:rgba(255,255,255,.018);stroke:none}
+      .ax{stroke:#4cc2ff;stroke-width:1.4;marker-end:url(#ar)}
+      .axg{stroke:#6ee7a0;stroke-width:1.4;marker-end:url(#arg);stroke-dasharray:4 3}
     </style>
   </defs>
 
-  <text x="24" y="26" class="lbl">T0 · 零仓内依赖（平等独立，不属于任何层级）</text>
-  <rect class="bx bx0" x="24"  y="36" width="128" height="30" rx="7"/><text x="40" y="55" class="t">chord</text>
-  <rect class="bx bx0" x="164" y="36" width="128" height="30" rx="7"/><text x="180" y="55" class="t">telemetry</text>
-  <rect class="bx bx0" x="304" y="36" width="128" height="30" rx="7"/><text x="320" y="55" class="t">tui</text>
-  <rect class="bx bx0" x="444" y="36" width="128" height="30" rx="7"/><text x="460" y="55" class="t">codemode</text>
-  <rect class="bx bx0" x="584" y="36" width="128" height="30" rx="7"/><text x="600" y="55" class="t">mcp</text>
-  <rect class="bx bx0" x="724" y="36" width="128" height="30" rx="7"/><text x="740" y="55" class="t">evals</text>
+  <line class="axg" x1="30" y1="80" x2="30" y2="500"/>
+  <text x="20" y="290" class="bs" transform="rotate(-90 20 290)" text-anchor="middle">依赖方向（箭头指向被依赖方）</text>
 
-  <!-- 主线 A：编码 agent -->
-  <text x="24" y="118" class="lbl">主线 A · 编码 Agent（telemetry → ai → agent → coding-agent）</text>
-  <rect class="bx bx1" x="24"  y="130" width="150" height="34" rx="7"/><text x="40" y="152" class="t">ai</text>
-  <rect class="bx bx1" x="232" y="130" width="150" height="34" rx="7"/><text x="248" y="152" class="t">agent</text>
-  <rect class="bx bx1" x="440" y="130" width="200" height="34" rx="7"/><text x="456" y="152" class="t">coding-agent</text>
-  <line class="e" x1="174" y1="147" x2="228" y2="147"/>
-  <line class="e" x1="382" y1="147" x2="436" y2="147"/>
-  <text x="660" y="152" class="s">+ chord / codemode / mcp / tui</text>
+  <rect class="band" x="56" y="58" width="844" height="114" rx="10"/>
+  <text x="68" y="78" class="lt">T3 · 顶层（依赖最多，没有任何包依赖它们）</text>
+  <rect class="bx bxh" x="68" y="88" width="392" height="70" rx="8"/>
+  <text x="82" y="110" class="bt">pi-coding-agent <tspan class="bs">— 唯一的顶层消费者</tspan></text>
+  <text x="82" y="128" class="bs">依赖：chord · agent · ai · codemode · mcp · tui（6 个）</text>
+  <text x="82" y="145" class="bs">内含：会话 · 压缩 · 扩展运行时 · 模型运行时（包内模块，非独立包）</text>
+  <rect class="bx bxp" x="476" y="88" width="410" height="70" rx="8"/>
+  <text x="490" y="110" class="bt">pi-env <tspan class="bs">— 远程执行（SSH daemon）</tspan></text>
+  <text x="490" y="128" class="bs">依赖：chord · durable</text>
+  <text x="490" y="145" class="bs">作用：工具执行放到另一台机器，pi 本体留在本地</text>
 
-  <!-- 主线 B：持久化与远程 -->
-  <text x="24" y="212" class="lbl">主线 B · 持久化与远程（与主线 A 无任何依赖边）</text>
-  <rect class="bx bx2" x="24"  y="224" width="150" height="34" rx="7"/><text x="40" y="246" class="t">protocol</text>
-  <rect class="bx bx2" x="232" y="224" width="150" height="34" rx="7"/><text x="248" y="246" class="t">durable</text>
-  <rect class="bx bx2" x="440" y="224" width="130" height="34" rx="7"/><text x="456" y="246" class="t">env</text>
-  <rect class="bx bx2" x="620" y="224" width="120" height="34" rx="7"/><text x="636" y="246" class="t">client</text>
-  <rect class="bx bx2" x="760" y="224" width="120" height="34" rx="7"/><text x="776" y="246" class="t">server</text>
-  <line class="e" x1="174" y1="241" x2="228" y2="241"/>
-  <line class="e" x1="382" y1="241" x2="436" y2="241"/>
-  <line class="e" x1="174" y1="241" x2="174" y2="196" />
-  <line class="e" x1="174" y1="196" x2="612" y2="196" />
-  <line class="e" x1="560" y1="196" x2="560" y2="220" />
-  <line class="e" x1="612" y1="196" x2="612" y2="220" />
-  <line class="e" x1="700" y1="196" x2="700" y2="220" />
-  <text x="24" y="300" class="s">chord（T0）同时被 protocol 与 durable 依赖；client / server 都建在 chord + protocol 之上；env 建在 chord + durable 之上</text>
-  <text x="24" y="318" class="s">两条主线之间没有任何依赖边：durable 不依赖 agent，coding-agent 不依赖 durable / protocol / client / server</text>
+  <line class="ax" x1="460" y1="174" x2="460" y2="194"/>
+
+  <rect class="band" x="56" y="196" width="844" height="106" rx="10"/>
+  <text x="68" y="216" class="lt">T2 · 运行时（两套 agent 运行时在这一层并列，互不依赖）</text>
+  <rect class="bx bxh" x="68" y="226" width="212" height="62" rx="8"/>
+  <text x="82" y="248" class="bt">pi-agent-core</text>
+  <text x="82" y="266" class="bs">依赖：ai（仅此一个）</text>
+  <text x="82" y="281" class="bs">主线 A · 编码 Agent 的循环</text>
+  <rect class="bx bxp" x="292" y="226" width="212" height="62" rx="8"/>
+  <text x="306" y="248" class="bt">pi-durable</text>
+  <text x="306" y="266" class="bs">依赖：chord · ai</text>
+  <text x="306" y="281" class="bs">主线 B · 不用 agent-core</text>
+  <rect class="bx bxp" x="516" y="226" width="180" height="62" rx="8"/>
+  <text x="530" y="248" class="bt">pi-client</text>
+  <text x="530" y="266" class="bs">依赖：chord · protocol</text>
+  <text x="530" y="281" class="bs">传输无关客户端</text>
+  <rect class="bx bxp" x="708" y="226" width="178" height="62" rx="8"/>
+  <text x="722" y="248" class="bt">pi-server</text>
+  <text x="722" y="266" class="bs">依赖：chord · protocol</text>
+  <text x="722" y="281" class="bs">会话路由服务端</text>
+
+  <line class="ax" x1="460" y1="304" x2="460" y2="324"/>
+
+  <rect class="band" x="56" y="326" width="844" height="90" rx="10"/>
+  <text x="68" y="346" class="lt">T1 · 模型与协议</text>
+  <rect class="bx bxh" x="68" y="356" width="392" height="48" rx="8"/>
+  <text x="82" y="378" class="bt">pi-ai <tspan class="bs">— 模型抽象层，42 个内置 Provider</tspan></text>
+  <text x="82" y="395" class="bs">依赖：pi-telemetry（它自己也依赖下层，不是万能的底座）</text>
+  <rect class="bx bxp" x="476" y="356" width="410" height="48" rx="8"/>
+  <text x="490" y="378" class="bt">pi-protocol <tspan class="bs">— CBOR 帧协议（experimental）</tspan></text>
+  <text x="490" y="395" class="bs">依赖：chord</text>
+
+  <line class="ax" x1="460" y1="418" x2="460" y2="438"/>
+
+  <rect class="band" x="56" y="440" width="844" height="86" rx="10"/>
+  <text x="68" y="460" class="lt">T0 · 零仓内依赖（平等独立的基础库：不属于任何层级，也不被层级「拥有」）</text>
+  <rect class="bx bx0" x="68"  y="470" width="128" height="46" rx="7"/>
+  <text x="80" y="490" class="bt">chord</text><text x="80" y="506" class="bs">组合运行时</text>
+  <rect class="bx bx0" x="204" y="470" width="128" height="46" rx="7"/>
+  <text x="216" y="490" class="bt">telemetry</text><text x="216" y="506" class="bs">遥测契约</text>
+  <rect class="bx bx0" x="340" y="470" width="128" height="46" rx="7"/>
+  <text x="352" y="490" class="bt">tui</text><text x="352" y="506" class="bs">终端 UI 框架</text>
+  <rect class="bx bx0" x="476" y="470" width="128" height="46" rx="7"/>
+  <text x="488" y="490" class="bt">codemode</text><text x="488" y="506" class="bs">QuickJS 沙箱</text>
+  <rect class="bx bx0" x="612" y="470" width="128" height="46" rx="7"/>
+  <text x="624" y="490" class="bt">mcp</text><text x="624" y="506" class="bs">MCP 客户端</text>
+  <rect class="bx bx0" x="748" y="470" width="138" height="46" rx="7"/>
+  <text x="760" y="490" class="bt">evals</text><text x="760" y="506" class="bs">评测</text>
+
+  <text x="68" y="545" class="bs">虚线箭头 = 依赖方向（指向被依赖方）；层间箭头只表示「该梯队存在对下层的依赖」，逐条边见上方表格。</text>
 </svg>
 <div class="figcap">
-  <b>怎么读</b>：横向是依赖方向（左被右依赖）。T0 的六个包是<b>平等独立</b>的基础库——它们不「属于」某一层，只是恰好没有仓内依赖。
-  主线 A 与主线 B <b>互不依赖</b>，这是 Pi 里最值得注意的结构事实。
+  <b>怎么读这张图</b>：从上往下是依赖方向。<b>蓝色 = 主线 A（编码 Agent）</b>，<b>紫色 = 主线 B（持久化与远程）</b>，灰色 = T0 独立基础库。
+  三处最容易被画错的地方已在图里直接标出：① <code>SessionManager</code> / <code>Compaction</code> / <code>Extension Runtime</code> / <code>ModelRuntime</code> 都是 <code>pi-coding-agent</code> 的<b>包内模块</b>，不是一层包；
+  ② <b><code>pi-durable</code> 与 <code>pi-agent-core</code> 在 T2 并列</b>，是两套互不依赖的 agent 运行时；
+  ③ <b><code>pi-env</code> 在 durable 之上</b>，与 coding-agent 分属两条支线（它不服务 coding-agent）。
 </div>
 </div>
 
