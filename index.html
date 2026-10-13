@@ -1621,10 +1621,22 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
 
   var links=[].slice.call(document.querySelectorAll("nav a[href^='#']"));
   var secs=links.map(function(a){return document.querySelector(a.getAttribute("href"));}).filter(Boolean);
+  var navEl=document.querySelector("nav");
   function spy(){
     var y=window.scrollY+140,cur=null;
     secs.forEach(function(s){if(s.offsetTop<=y)cur=s.id;});
-    links.forEach(function(a){a.classList.toggle("on",a.getAttribute("href")==="#"+cur);});
+    var act=null;
+    links.forEach(function(a){
+      var on=a.getAttribute("href")==="#"+cur;
+      a.classList.toggle("on",on);
+      if(on)act=a;
+    });
+    // 内容区滚动时让侧栏同步滚动：把当前高亮项保持在侧栏可视区内
+    if(act&&navEl&&navEl.scrollHeight>navEl.clientHeight){
+      var nr=navEl.getBoundingClientRect(),ar=act.getBoundingClientRect(),pad=16;
+      if(ar.top<nr.top+pad)navEl.scrollTop-=(nr.top+pad-ar.top);
+      else if(ar.bottom>nr.bottom-pad)navEl.scrollTop+=(ar.bottom-(nr.bottom-pad));
+    }
   }
   window.addEventListener("scroll",spy,{passive:true});spy();
 })();
