@@ -1622,22 +1622,37 @@ session.dispose();   <span class="cm">// 中止进行中的工作、失效扩展
   var links=[].slice.call(document.querySelectorAll("nav a[href^='#']"));
   var secs=links.map(function(a){return document.querySelector(a.getAttribute("href"));}).filter(Boolean);
   var navEl=document.querySelector("nav");
+  var lockedHref=null;   // 点击菜单后锁定高亮，直到用户自己滚动
+  function keepVisible(a){
+    if(!navEl||navEl.scrollHeight<=navEl.clientHeight)return;
+    var nr=navEl.getBoundingClientRect(),ar=a.getBoundingClientRect(),pad=16;
+    if(ar.top<nr.top+pad)navEl.scrollTop-=(nr.top+pad-ar.top);
+    else if(ar.bottom>nr.bottom-pad)navEl.scrollTop+=(ar.bottom-(nr.bottom-pad));
+  }
   function spy(){
-    var y=window.scrollY+140,cur=null;
+    // 判定线取 24px：与 h2/h3 的 scroll-margin-top:16px 对齐，
+    // 保证「被点中的章节」一定是高亮项（原本的 140px 会让紧跟其后的子章节抢走高亮）
+    var y=window.scrollY+24,cur=null;
     secs.forEach(function(s){if(s.offsetTop<=y)cur=s.id;});
+    var href=lockedHref||(cur?"#"+cur:links[0].getAttribute("href"));
     var act=null;
     links.forEach(function(a){
-      var on=a.getAttribute("href")==="#"+cur;
+      var on=a.getAttribute("href")===href;
       a.classList.toggle("on",on);
       if(on)act=a;
     });
     // 内容区滚动时让侧栏同步滚动：把当前高亮项保持在侧栏可视区内
-    if(act&&navEl&&navEl.scrollHeight>navEl.clientHeight){
-      var nr=navEl.getBoundingClientRect(),ar=act.getBoundingClientRect(),pad=16;
-      if(ar.top<nr.top+pad)navEl.scrollTop-=(nr.top+pad-ar.top);
-      else if(ar.bottom>nr.bottom-pad)navEl.scrollTop+=(ar.bottom-(nr.bottom-pad));
-    }
+    if(act)keepVisible(act);
   }
+  links.forEach(function(a){
+    // 点菜单立即锁定该条为高亮（不等滚动事件），滚动落点仍由浏览器处理
+    a.addEventListener("click",function(){lockedHref=a.getAttribute("href");spy();});
+  });
+  ["wheel","touchstart","keydown","mousedown"].forEach(function(ev){
+    window.addEventListener(ev,function(){lockedHref=null;},{passive:true});
+  });
+  var mainEl=document.querySelector("main");
+  if(mainEl)mainEl.addEventListener("click",function(){lockedHref=null;});
   window.addEventListener("scroll",spy,{passive:true});spy();
 })();
 </script>
